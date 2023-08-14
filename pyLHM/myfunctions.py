@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.interpolate import RegularGridInterpolator
 
 def angularSpectrum(field, z, wavelength, dx, dy):
     '''
@@ -79,9 +80,9 @@ def RS1_Free(Field_Input,z,wavelength,pixel_pitch_in,pixel_pitch_out,Output_shap
 
     
     # The first pair of loops ranges over the points in the output plane in order to determine r01
-    for x_sample in range(OutputShape[0]):
+    for x_sample in range(Output_shape[0]):
         x_fis_out = x_cord_out[x_sample]
-        for y_sample in range(OutputShape[1]):
+        for y_sample in range(Output_shape[1]):
             # start = time.time()
             y_fis_out = y_cord_out[y_sample]
             mr01 = np.sqrt(np.power(x_fis_out-X_inp,2)+np.power(y_fis_out-Y_inp,2)+(z)**2)
@@ -95,7 +96,7 @@ def RS1_Free(Field_Input,z,wavelength,pixel_pitch_in,pixel_pitch_out,Output_shap
     Viewing_window = [-x_out_lim,x_out_lim,-y_out_lim,y_out_lim]
     return U0,Viewing_window
 
-def CONV_SAASM_V2(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
+def SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     '''
     Function to diffract a complex field using the angular spectrum approach with a Semi-Analytical spherical wavefront.
     This operator only works for convergent fields, for divergent fields see DIV_SAASM
@@ -112,7 +113,7 @@ def CONV_SAASM_V2(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
 
 
     # Starting cooridnates computation
-    k_wl = 2 * pi / wavelength
+    k_wl = 2 * np.pi / wavelength
     M, N = field.shape
     #Linear Coordinates
     x = np.arange(0, N, 1)  # array x
@@ -122,8 +123,8 @@ def CONV_SAASM_V2(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     #Grids
     X_in, Y_in = np.meshgrid((x - (N / 2))*pixel_pitch_in[0], (y - (M / 2))*pixel_pitch_in[1], indexing='xy')
     FX, FY = np.meshgrid(fx, fy, indexing='xy')
-    KX = FX * 2 * pi
-    KY = FY * 2 * pi
+    KX = FX * 2 * np.pi
+    KY = FY * 2 * np.pi
     MR_in = (X_in**2 + Y_in**2)
     MK = np.sqrt(KX**2 + KY**2)
     kmax = np.amax(MK)
@@ -214,8 +215,8 @@ def CONV_SAASM_V2(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     fx_out = np.fft.fftshift(np.fft.fftfreq(Nfin,pixel_pitch_out[0]))
     fy_out = np.fft.fftshift(np.fft.fftfreq(Mfin,pixel_pitch_out[1]))
     FX_out, FY_out = np.meshgrid(fx_out, fy_out, indexing='xy')
-    KX_out = FX_out * 2 * pi
-    KY_out = FY_out * 2 * pi
+    KX_out = FX_out * 2 * np.pi
+    KY_out = FY_out * 2 * np.pi
     MK_out = np.sqrt(KX_out**2 + KY_out**2)
     taylor_no_sup = (c*kmax + d *(MK_out**2)/kmax)
     spherical_ideal = np.sqrt(k_wl**2 - MK_out**2)
@@ -228,5 +229,8 @@ def CONV_SAASM_V2(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     # E_out = E_out[half_size3[0]-int(5017/2):half_size3[0]+int(5017/2),half_size3[1]-int(5017/2):half_size3[1]+int(5017/2)]
     print('Output pixel pitch: ',pp1* 10**6,'um')
     return E_out
+
+# KREUZER AND REALISTIC ARE MISSING
+
 
 

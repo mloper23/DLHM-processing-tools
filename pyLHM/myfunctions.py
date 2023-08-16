@@ -1,3 +1,9 @@
+# August 2023
+# DLHM library for reconstruction comparison
+# Author: Tomas Velez
+# Kreuzer taken from Maria J Lopera (https://github.com/mloper23/DLHM-backend), angular spectrum taken from C Trujillo (https://github.com/catrujilla/pyCUDA-NumericalPropagators)
+
+
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
@@ -96,7 +102,7 @@ def RS1_Free(Field_Input,z,wavelength,pixel_pitch_in,pixel_pitch_out,Output_shap
     Viewing_window = [-x_out_lim,x_out_lim,-y_out_lim,y_out_lim]
     return U0,Viewing_window
 
-def SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
+def CONV_SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     '''
     Function to diffract a complex field using the angular spectrum approach with a Semi-Analytical spherical wavefront.
     This operator only works for convergent fields, for divergent fields see DIV_SAASM
@@ -113,7 +119,7 @@ def SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
 
 
     # Starting cooridnates computation
-    k_wl = 2 * np.pi / wavelength
+    k_wl = 2 * pi / wavelength
     M, N = field.shape
     #Linear Coordinates
     x = np.arange(0, N, 1)  # array x
@@ -123,63 +129,72 @@ def SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     #Grids
     X_in, Y_in = np.meshgrid((x - (N / 2))*pixel_pitch_in[0], (y - (M / 2))*pixel_pitch_in[1], indexing='xy')
     FX, FY = np.meshgrid(fx, fy, indexing='xy')
-    KX = FX * 2 * np.pi
-    KY = FY * 2 * np.pi
+    KX = FX * 2 * pi
+    KY = FY * 2 * pi
     MR_in = (X_in**2 + Y_in**2)
     MK = np.sqrt(KX**2 + KY**2)
-    kmax = np.amax(MK)
+    kmax = np.abs(np.amax(MK))
+  
 
+    ''' IN THIS STEP THE FIRST FOURIER TRANSFORM OF THE FIELD IS CALCULATED DOING A RESAMPLING USING THE
+    FAST FOURIER TRASNSFORM AND A PADDING. THIS TRANSFORM HAS AS OUTPUT COORDINATE THE SCALED COORDINATE
+    BETA, THAT IS NOT RELEVANT FOR THIS STEP BUT THE NEXT ONE'''
     # Fitting parameters for the parabolic fase
     k_interm = (k_wl/kmax)
     c = (2/3 * k_interm) + 2/3 * np.sqrt(k_interm**2 - 0.5)- 1/3 * np.sqrt(k_interm**2 -1)
     d = np.sqrt(k_interm**2 - 1) - k_interm
     pp0 = pixel_pitch_in[0]
-    
 
-
-    #Calculating the beta coordinates as output for the first fourier transform
-    X_out, Y_out = np.meshgrid((x - (N / 2))*pixel_pitch_out[0], (y- (M / 2))*pixel_pitch_out[1], indexing='xy')
-    bX = -kmax * X_out / (2*d*z)
-    bY = -kmax * Y_out / (2*d*z)
-    Mbeta = np.sqrt(np.power(bX,2)+np.power(bY,2))
-    
-
-    ''' IN THIS STEP THE FIRST FOURIER TRANSFORM OF THE FIELD IS CALCULATED DOING A RESAMPLING USING THE
-    FAST FOURIER TRASNSFORM AND A PADDING. THIS TRANSFORM HAS AS OUTPUT COORDINATE THE SCALED COORDINATE
-    BETA, THAT IS NOT RELEVANT FOR THIS STEP BUT THE NEXT ONE'''
     # Initial interpolation for j=1
     max_grad_alpha = -kmax/(2*d*z) * np.amax(MR_in)
     alpha = (np.exp(-1j* c * kmax * z)*kmax/(2j * d * z)) * np.exp((1j * kmax * MR_in)/(4*d*z))
 
     #Interpolation of the input field Scipy
-    xin = (x - (N / 2))*pp0
-    yin = (y - (M / 2))*pp0
+    
     N2 = int(N*(2+max_grad_alpha*pp0/np.pi))
     M2 = int(M*(2+max_grad_alpha*pp0/np.pi))
+    # M2 = 4*M
+    # N2 = 4*N
 
     pp1 = M*pixel_pitch_in[0]/M2
     x1 = np.arange(0, N2-1, 1)
     y1 = np.arange(0, M2-1, 1)
-    
-
     X1,Y1 = np.meshgrid((x1 - (N2 / 2))*pp1, (y1 - (M2 / 2))*pp1,indexing='ij')
+    fx1 = np.fft.fftshift(np.fft.fftfreq(N2,pp1))
+    fy1 = np.fft.fftshift(np.fft.fftfreq(M2,pp1))
+    FX1, FY1 = np.meshgrid(fx1, fy1, indexing='xy')
+    # THIS LINEs ARE FOR TRIALS ONLY
+    X1 = Y_in
+    Y1 = X_in
+    FX1 = FX
+    FY1 = FY
+    #_______________________________
+    KX1 = FX1 * 2 * pi
+    KY1 = FY1 * 2 * pi
+    MK1 = np.sqrt(KX1**2 + KY1**2)
+    kmax = np.abs(np.amax(MK1))
+
+    
+    xin = (x - (N / 2))*pp0
+    yin = (y - (M / 2))*pp0
     inter = RegularGridInterpolator((xin,yin),field,bounds_error=False, fill_value=None)
     E_interpolated = inter((X1,Y1))
+
     MR1 = (X1**2 + Y1**2)
+    k_interm = (k_wl/kmax)
+    c = (2/3 * k_interm) + 2/3 * np.sqrt(k_interm**2 - 0.5)- 1/3 * np.sqrt(k_interm**2 -1)
+    d = np.sqrt(k_interm**2 - 1) - k_interm
+
     alpha = np.exp(-1j* c * kmax * z)*kmax/(2j * d * z) * np.exp((1j * kmax * MR1)/(4*d*z))
     E_interpolated = E_interpolated - np.amin(E_interpolated)
     E_interpolated = E_interpolated/np.amax(E_interpolated)
     EM1 = np.divide(E_interpolated,alpha)
 
     #Padding variables for j=2
-    max_grad_kernel = np.amax(Mbeta)
-    
+    # max_grad_kernel = np.amax(Mbeta)
     
     # Computation of the j=1 step
     FE1 = np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(EM1)))
-    #Slicing of the input field in the inner region where the field is valid
-    # half_size1 = [int(np.shape(FE1)[0]/2),int(np.shape(FE1)[1]/2)]
-    # FE1 = FE1[half_size1[0]-int(M/2):half_size1[0]+int(M/2),half_size1[1]-int(N/2):half_size1[1]+int(N/2)]
 
     
 
@@ -191,11 +206,11 @@ def SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     x2 = np.arange(0,N0,1)
     y2 = np.arange(0,M0,1)
     # If required, check the pixel size
+    # X_out, Y_out = np.meshgrid((x2 - (N0 / 2))*pp1, (y2- (M0 / 2))*pp1, indexing='xy')#<----------------------erase this
     X_out, Y_out = np.meshgrid((x2 - (N0 / 2))*pixel_pitch_out[0], (y2- (M0 / 2))*pixel_pitch_out[1], indexing='xy')
     Mrho = np.sqrt(np.power(X_out,2)+np.power(Y_out,2))
     bX = -kmax * X_out / (2*d*z)    
     bY = -kmax * Y_out / (2*d*z)
-    print('C = ',str(-kmax/(2*d*z)))
     Mbeta = np.sqrt(np.power(bX,2)+np.power(bY,2))
     kernel = np.exp(-1j * d * z * np.power(Mbeta,2)/(kmax))
     # kernel = np.exp(-1j * kmax * np.power(Mrho,2)/(4 * d * z))
@@ -203,7 +218,7 @@ def SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
 
     # Computation of the j=2 step
     FE2 = np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(EM2)))
-    half_size2 = [int(np.shape(FE2)[0]/2),int(np.shape(FE2)[1]/2)]
+    # half_size2 = [int(np.shape(FE2)[0]/2),int(np.shape(FE2)[1]/2)]
     # FE2 = FE2[half_size2[0]-int(M/2):half_size2[0]+int(M/2),half_size2[1]-int(N/2):half_size2[1]+int(N/2)]
     
 
@@ -212,23 +227,128 @@ def SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     IS RESAMPLED IN TERMS OF FE2'''
     # Calculation of the superior order phases
     Mfin,Nfin = np.shape(FE2)
+    #----------------ERASE THIS-----------------
+    # fx_out = np.fft.fftshift(np.fft.fftfreq(Nfin,pp1))
+    # fy_out = np.fft.fftshift(np.fft.fftfreq(Mfin,pp1))
+    #-------------------------------------------
+    
     fx_out = np.fft.fftshift(np.fft.fftfreq(Nfin,pixel_pitch_out[0]))
     fy_out = np.fft.fftshift(np.fft.fftfreq(Mfin,pixel_pitch_out[1]))
     FX_out, FY_out = np.meshgrid(fx_out, fy_out, indexing='xy')
-    KX_out = FX_out * 2 * np.pi
-    KY_out = FY_out * 2 * np.pi
+    KX_out = FX_out * 2 * pi
+    KY_out = FY_out * 2 * pi
     MK_out = np.sqrt(KX_out**2 + KY_out**2)
     taylor_no_sup = (c*kmax + d *(MK_out**2)/kmax)
+    etay = np.exp(1j*z*taylor_no_sup)
     spherical_ideal = np.sqrt(k_wl**2 - MK_out**2)
+    esph = np.exp(1j*z*spherical_ideal)
     h = spherical_ideal - taylor_no_sup
     
     # Computation of the j=3 step
-    E_out = np.fft.ifftshift(np.fft.ifft2(np.fft.fftshift(FE2 * np.exp(1j * z * h))))
-    half_size3 = [int(np.shape(E_out)[0]/2),int(np.shape(E_out)[1]/2)]
+    phase_h = np.exp(1j * z * h)
+    EM3 = FE2 * phase_h
+    E_out = np.fft.ifftshift(np.fft.ifft2(np.fft.fftshift(EM3)))
+    # half_size3 = [int(np.shape(E_out)[0]/2),int(np.shape(E_out)[1]/2)]
     # E_out = E_out[half_size3[0]-int(M/2):half_size3[0]+int(M/2),half_size3[1]-int(N/2):half_size3[1]+int(N/2)]
     # E_out = E_out[half_size3[0]-int(5017/2):half_size3[0]+int(5017/2),half_size3[1]-int(5017/2):half_size3[1]+int(5017/2)]
-    print('Output pixel pitch: ',pp1* 10**6,'um')
+    print('Output pixel pitch: ',pixel_pitch_out[0]* 10**6,'um')
     return E_out
+
+def kreuzer3F(CH_m, z, L, lamvda, deltax, deltaX, FC):
+    # Squared pixels
+    deltaY = deltaX
+    # Matrix size
+    [row, a] = CH_m.shape
+    # Parameters
+    k = 2 * np.pi / lamvda
+    W = deltax * row
+    #  Matrix coordinates
+    delta = np.linspace(1, row, num = row)
+    [X, Y] = np.meshgrid(delta, delta)
+    # Hologram origin coordinates
+    xo = -W / 2
+    yo = -W / 2
+    # Prepared hologram, coordinates origin
+    xop = xo * L / np.sqrt(L ** 2 + xo ** 2)
+    yop = yo * L / np.sqrt(L ** 2 + yo ** 2)
+    # Pixel size for the prepared hologram (squared)
+    deltaxp = xop / (-row / 2)
+    deltayp = deltaxp
+    # Coordinates origin for the reconstruction plane
+    Yo = -deltaX * row / 2
+    Xo = -deltaX * row / 2
+
+    Xp = (deltax * (X - row / 2) * L / (
+        np.sqrt(L ** 2 + (deltax ** 2) * (X - row / 2) ** 2 + (deltax ** 2) * (Y - row / 2) ** 2)))
+    Yp = (deltax * (Y - row / 2) * L / (
+        np.sqrt(L ** 2 + (deltax ** 2) * (X - row / 2) ** 2 + (deltax ** 2) * (Y - row / 2) ** 2)))
+    # Preparation of the hologram
+    CHp_m = prepairholoF(CH_m, xop, yop, Xp, Yp)
+    # Multiply prepared hologram with propagation phase
+    Rp = np.sqrt((L ** 2) - (deltaxp * X + xop) ** 2 - (deltayp * Y + yop) ** 2)
+    r = np.sqrt((deltaX ** 2) * ((X - row / 2) ** 2 + (Y - row / 2) ** 2) + z ** 2)
+    CHp_m = CHp_m * ((L / Rp) ** 4) * np.exp(-0.5 * 1j * k * (r ** 2 - 2 * z * L) * Rp / (L ** 2))
+    # Padding constant value
+    pad = int(row / 2)
+    # Padding on the cosine rowlter
+    FC = np.pad(FC, (int(pad), int(pad)))
+    # Convolution operation
+    # First transform
+    T1 = CHp_m * np.exp((1j * k / (2 * L)) * (
+            2 * Xo * X * deltaxp + 2 * Yo * Y * deltayp + X ** 2 * deltaxp * deltaX + Y ** 2 * deltayp * deltaY))
+    T1 = np.pad(T1, (int(pad), int(pad)))
+    T1 = ft(T1 * FC)
+    # Second transform
+    T2 = np.exp(-1j * (k / (2 * L)) * ((X - row / 2) ** 2 * deltaxp * deltaX + (Y - row / 2) ** 2 * deltayp * deltaY))
+    T2 = np.pad(T2, (int(pad), int(pad)))
+    T2 = ft(T2 * FC)
+    # Third transform
+    K = ift(T2 * T1)
+    K = K[pad + 1:pad + row, pad + 1: pad + row]
+
+    return K
+
+def prepairholoF(CH_m, xop, yop, Xp, Yp):
+    # User function to prepare the hologram using nearest neihgboor interpolation strategy
+    [row, a] = CH_m.shape
+    # New coordinates measured in units of the -2*xop/row pixel size
+    Xcoord = (Xp - xop) / (-2 * xop / row)
+    Ycoord = (Yp - yop) / (-2 * xop / row)
+    # Find lowest integer
+    iXcoord = np.floor(Xcoord)
+    iYcoord = np.floor(Ycoord)
+    # Assure there isn't null pixel positions
+    iXcoord[iXcoord == 0] = 1
+    iYcoord[iYcoord == 0] = 1
+    # Calculate the fractionating for interpolation
+    x1frac = (iXcoord + 1.0) - Xcoord  # Upper value to integer
+    x2frac = 1.0 - x1frac
+    y1frac = (iYcoord + 1.0) - Ycoord  # Lower value to integer
+    y2frac = 1.0 - y1frac
+
+    x1y1 = x1frac * y1frac  # Corresponding pixel areas for each direction
+    x1y2 = x1frac * y2frac
+    x2y1 = x2frac * y1frac
+    x2y2 = x2frac * y2frac
+    # Pre allocate the prepared hologram
+    CHp_m = np.zeros([row, row])
+    # Prepare hologram (preparation - every pixel remapping)
+    for it in range(0, row - 2):
+        for jt in range(0, row - 2):
+            CHp_m[int(iYcoord[it, jt]), int(iXcoord[it, jt])] = CHp_m[int(iYcoord[it, jt]), int(iXcoord[it, jt])] + (x1y1[it, jt]) * CH_m[it, jt]
+            CHp_m[int(iYcoord[it, jt]), int(iXcoord[it, jt]) + 1] = CHp_m[int(iYcoord[it, jt]), int(iXcoord[it, jt]) + 1] + (x2y1[it, jt]) * CH_m[it, jt]
+            CHp_m[int(iYcoord[it, jt]) + 1, int(iXcoord[it, jt])] = CHp_m[int(iYcoord[it, jt]) + 1, int(iXcoord[it, jt])] + (x1y2[it, jt]) * CH_m[it, jt]
+            CHp_m[int(iYcoord[it, jt]) + 1, int(iXcoord[it, jt]) + 1] = CHp_m[int(iYcoord[it, jt]) + 1, int(iXcoord[it, jt]) + 1] + (x2y2[it, jt]) * CH_m[it, jt]
+
+    return CHp_m
+
+def ft(u):
+    ut = np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(u)))
+    return ut
+
+def ift(u):
+    uit = np.fft.ifftshift(np.fft.ifft2(np.fft.fftshift(u)))
+    return uit
 
 # KREUZER AND REALISTIC ARE MISSING
 

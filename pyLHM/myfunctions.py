@@ -1,15 +1,32 @@
 # August 2023
 # DLHM library for reconstruction comparison
 # Author: Tomas Velez
-# Kreuzer taken from Maria J Lopera (https://github.com/mloper23/DLHM-backend), angular spectrum taken from C Trujillo (https://github.com/catrujilla/pyCUDA-NumericalPropagators)
-
+# Kreuzer taken from Maria J Lopera (https://github.com/mloper23/DLHM-backend), angular spectrum taken from C Trujillo (https://github.com/catrujilla/pyDHM)
+# Autofocus based on Maria J Lopera (https://github.com/mloper23/DLHM-backend)
 
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
+from PIL import Image
+from scipy.signal import convolve2d
 
-def angularSpectrum(field, z, wavelength, dx, dy):
+def autofocus(propagator_name,parameters,z1,z2,it):
+    delta = (z2-z1)/it
+    focus_metric = []
+    for i in range(0,it):
+        params = [z1 + i*delta] + parameters
+        hz = reconstruct(propagator_name,params)
+        focus_metric[i] = np.sum(np.abs(hz))
+    min = np.argmin(focus_metric)
+    d = z1 + min * delta
+    return d
+
+
+def realisticAS():
+    return 0
+
+def angularSpectrum(z, field, wavelength, pixel_pitch_in, pixel_pitch_out):
     '''
-    # Function from pyDHM
+    # Function from pyDHM (https://github.com/catrujilla/pyDHM)
 
     # Function to diffract a complex field using the angular spectrum approach
     # Inputs:
@@ -23,8 +40,8 @@ def angularSpectrum(field, z, wavelength, dx, dy):
     y = np.arange(0, M, 1)  # array y
     X, Y = np.meshgrid(x - (N / 2), y - (M / 2), indexing='xy')
 
-    dfx = 1 / (dx * M)
-    dfy = 1 / (dy * N)
+    dfx = 1 / (pixel_pitch_in[0] * M)
+    dfy = 1 / (pixel_pitch_in[1] * N)
     
     field_spec = np.fft.fftshift(field)
     field_spec = np.fft.fft2(field_spec)
@@ -40,7 +57,7 @@ def angularSpectrum(field, z, wavelength, dx, dy):
 	
     return out
 
-def RS1_Free(Field_Input,z,wavelength,pixel_pitch_in,pixel_pitch_out,Output_shape):
+def rayleigh1Free(z, field, wavelength, pixel_pitch_in, pixel_pitch_out, out_shape):
     '''
     Function to cumpute the Raleygh Sommerfeld 1 diffraction integral wothout approximations or the use of FFT,
     but allowing to change the output sampling (pixel pitch and shape).
@@ -60,13 +77,13 @@ def RS1_Free(Field_Input,z,wavelength,pixel_pitch_in,pixel_pitch_out,Output_shap
     dx_out = pixel_pitch_out[0] #Output Pixel Size X
     dy_out = pixel_pitch_out[1] #Output Pixel Size Y
     
-    M,N = np.shape(Field_Input)
-    (M2,N2) = Output_shape
+    M,N = np.shape(field)
+    (M2,N2) = out_shape
     k = (2*np.pi)/wavelength # Wave number of the ilumination source
     
 
-    U0 = np.zeros(Output_shape,dtype='complex_')
-    U1 = Field_Input  #This will be the hologram plane 
+    U0 = np.zeros(out_shape,dtype='complex_')
+    U1 = field  #This will be the hologram plane 
 
 
     x_inp_lim = dx*int(N/2)
@@ -86,9 +103,9 @@ def RS1_Free(Field_Input,z,wavelength,pixel_pitch_in,pixel_pitch_out,Output_shap
 
     
     # The first pair of loops ranges over the points in the output plane in order to determine r01
-    for x_sample in range(Output_shape[0]):
+    for x_sample in range(out_shape[0]):
         x_fis_out = x_cord_out[x_sample]
-        for y_sample in range(Output_shape[1]):
+        for y_sample in range(out_shape[1]):
             # start = time.time()
             y_fis_out = y_cord_out[y_sample]
             mr01 = np.sqrt(np.power(x_fis_out-X_inp,2)+np.power(y_fis_out-Y_inp,2)+(z)**2)
@@ -102,10 +119,10 @@ def RS1_Free(Field_Input,z,wavelength,pixel_pitch_in,pixel_pitch_out,Output_shap
     Viewing_window = [-x_out_lim,x_out_lim,-y_out_lim,y_out_lim]
     return U0,Viewing_window
 
-def CONV_SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
+def convergentSAASM(z, field, wavelength, pixel_pitch_in, pixel_pitch_out):
     '''
     Function to diffract a complex field using the angular spectrum approach with a Semi-Analytical spherical wavefront.
-    This operator only works for convergent fields, for divergent fields see DIV_SAASM
+    This operator only works for convergent fields.
     For further reference review: https://opg.optica.org/josaa/abstract.cfm?uri=josaa-31-3-591 and https://doi.org/10.1117/12.2642760
 
     
@@ -119,7 +136,7 @@ def CONV_SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
 
 
     # Starting cooridnates computation
-    k_wl = 2 * pi / wavelength
+    k_wl = 2 * np.pi / wavelength
     M, N = field.shape
     #Linear Coordinates
     x = np.arange(0, N, 1)  # array x
@@ -129,8 +146,8 @@ def CONV_SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     #Grids
     X_in, Y_in = np.meshgrid((x - (N / 2))*pixel_pitch_in[0], (y - (M / 2))*pixel_pitch_in[1], indexing='xy')
     FX, FY = np.meshgrid(fx, fy, indexing='xy')
-    KX = FX * 2 * pi
-    KY = FY * 2 * pi
+    KX = FX * 2 * np.pi
+    KY = FY * 2 * np.pi
     MR_in = (X_in**2 + Y_in**2)
     MK = np.sqrt(KX**2 + KY**2)
     kmax = np.abs(np.amax(MK))
@@ -169,8 +186,8 @@ def CONV_SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     FX1 = FX
     FY1 = FY
     #_______________________________
-    KX1 = FX1 * 2 * pi
-    KY1 = FY1 * 2 * pi
+    KX1 = FX1 * 2 * np.pi
+    KY1 = FY1 * 2 * np.pi
     MK1 = np.sqrt(KX1**2 + KY1**2)
     kmax = np.abs(np.amax(MK1))
 
@@ -235,8 +252,8 @@ def CONV_SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     fx_out = np.fft.fftshift(np.fft.fftfreq(Nfin,pixel_pitch_out[0]))
     fy_out = np.fft.fftshift(np.fft.fftfreq(Mfin,pixel_pitch_out[1]))
     FX_out, FY_out = np.meshgrid(fx_out, fy_out, indexing='xy')
-    KX_out = FX_out * 2 * pi
-    KY_out = FY_out * 2 * pi
+    KX_out = FX_out * 2 * np.pi
+    KY_out = FY_out * 2 * np.pi
     MK_out = np.sqrt(KX_out**2 + KY_out**2)
     taylor_no_sup = (c*kmax + d *(MK_out**2)/kmax)
     etay = np.exp(1j*z*taylor_no_sup)
@@ -254,14 +271,16 @@ def CONV_SAASM(field, z, wavelength, pixel_pitch_in,pixel_pitch_out):
     print('Output pixel pitch: ',pixel_pitch_out[0]* 10**6,'um')
     return E_out
 
-def kreuzer3F(CH_m, z, L, lamvda, deltax, deltaX, FC):
+def kreuzer3F(z, field, wavelength, pixel_pitch_in, pixel_pitch_out, L, FC):
+    dx = pixel_pitch_in[0]
+    dX = pixel_pitch_out[0]
     # Squared pixels
-    deltaY = deltaX
+    deltaY = dX
     # Matrix size
-    [row, a] = CH_m.shape
+    [row, a] = field.shape
     # Parameters
-    k = 2 * np.pi / lamvda
-    W = deltax * row
+    k = 2 * np.pi / wavelength
+    W = dx * row
     #  Matrix coordinates
     delta = np.linspace(1, row, num = row)
     [X, Y] = np.meshgrid(delta, delta)
@@ -275,18 +294,18 @@ def kreuzer3F(CH_m, z, L, lamvda, deltax, deltaX, FC):
     deltaxp = xop / (-row / 2)
     deltayp = deltaxp
     # Coordinates origin for the reconstruction plane
-    Yo = -deltaX * row / 2
-    Xo = -deltaX * row / 2
+    Yo = -dX * row / 2
+    Xo = -dX * row / 2
 
-    Xp = (deltax * (X - row / 2) * L / (
-        np.sqrt(L ** 2 + (deltax ** 2) * (X - row / 2) ** 2 + (deltax ** 2) * (Y - row / 2) ** 2)))
-    Yp = (deltax * (Y - row / 2) * L / (
-        np.sqrt(L ** 2 + (deltax ** 2) * (X - row / 2) ** 2 + (deltax ** 2) * (Y - row / 2) ** 2)))
+    Xp = (dx * (X - row / 2) * L / (
+        np.sqrt(L ** 2 + (dx ** 2) * (X - row / 2) ** 2 + (dx ** 2) * (Y - row / 2) ** 2)))
+    Yp = (dx * (Y - row / 2) * L / (
+        np.sqrt(L ** 2 + (dx ** 2) * (X - row / 2) ** 2 + (dx ** 2) * (Y - row / 2) ** 2)))
     # Preparation of the hologram
-    CHp_m = prepairholoF(CH_m, xop, yop, Xp, Yp)
+    CHp_m = prepairholoF(field, xop, yop, Xp, Yp)
     # Multiply prepared hologram with propagation phase
     Rp = np.sqrt((L ** 2) - (deltaxp * X + xop) ** 2 - (deltayp * Y + yop) ** 2)
-    r = np.sqrt((deltaX ** 2) * ((X - row / 2) ** 2 + (Y - row / 2) ** 2) + z ** 2)
+    r = np.sqrt((dX ** 2) * ((X - row / 2) ** 2 + (Y - row / 2) ** 2) + z ** 2)
     CHp_m = CHp_m * ((L / Rp) ** 4) * np.exp(-0.5 * 1j * k * (r ** 2 - 2 * z * L) * Rp / (L ** 2))
     # Padding constant value
     pad = int(row / 2)
@@ -295,11 +314,11 @@ def kreuzer3F(CH_m, z, L, lamvda, deltax, deltaX, FC):
     # Convolution operation
     # First transform
     T1 = CHp_m * np.exp((1j * k / (2 * L)) * (
-            2 * Xo * X * deltaxp + 2 * Yo * Y * deltayp + X ** 2 * deltaxp * deltaX + Y ** 2 * deltayp * deltaY))
+            2 * Xo * X * deltaxp + 2 * Yo * Y * deltayp + X ** 2 * deltaxp * dX + Y ** 2 * deltayp * deltaY))
     T1 = np.pad(T1, (int(pad), int(pad)))
     T1 = ft(T1 * FC)
     # Second transform
-    T2 = np.exp(-1j * (k / (2 * L)) * ((X - row / 2) ** 2 * deltaxp * deltaX + (Y - row / 2) ** 2 * deltayp * deltaY))
+    T2 = np.exp(-1j * (k / (2 * L)) * ((X - row / 2) ** 2 * deltaxp * dX + (Y - row / 2) ** 2 * deltayp * deltaY))
     T2 = np.pad(T2, (int(pad), int(pad)))
     T2 = ft(T2 * FC)
     # Third transform
@@ -342,6 +361,45 @@ def prepairholoF(CH_m, xop, yop, Xp, Yp):
 
     return CHp_m
 
+def open_image(file_path):
+    im = Image.open(file_path).convert('L')
+    im = np.asarray(im)/255
+    return im
+
+def reconstruct(propagator_name,parameters):
+    if (propagator_name in locals()) and (callable(locals()[propagator_name])):
+        propagator = locals()[propagator_name]
+        try:
+            output_image = propagator(*parameters)
+        except:
+            print('Not the appropiate set of parameters')
+            exit()
+    else:
+        print('Not a valid propagator')
+        exit()
+    
+        
+    return output_image
+
+def measure_noise(I):
+    '''
+    Function to estimate the sigma noise factor in an image according to https://doi.org/10.1006/cviu.1996.0060 implemented
+    in https://stackoverflow.com/questions/2440504/noise-estimation-noise-measurement-in-image
+
+    
+    ### Input:
+    * I: Grayscale image as a numpy array 
+    '''
+    H, W = I.shape
+
+    M = [[1, -2, 1],
+       [-2, 4, -2],
+       [1, -2, 1]]
+
+    sigma = np.sum(np.sum(np.absolute(convolve2d(I, M))))
+    sigma = sigma * np.sqrt(0.5 * np.pi) / (6 * (W-2) * (H-2))
+    return sigma
+
 def ft(u):
     ut = np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(u)))
     return ut
@@ -350,7 +408,13 @@ def ift(u):
     uit = np.fft.ifftshift(np.fft.ifft2(np.fft.fftshift(u)))
     return uit
 
-# KREUZER AND REALISTIC ARE MISSING
+
+
+
+
+
+
+
 
 
 

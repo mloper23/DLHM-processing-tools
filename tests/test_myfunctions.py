@@ -53,8 +53,9 @@ distortion = {}
 resolution = {}
 contrast = {}
 time = {}
-distance = {}
-
+rec_distance = {}       # [mm]
+rel_rec_distance={}
+phase_sensitivity={}
 
 
 

@@ -38,9 +38,10 @@ class focus:
     def autofocus(self,propagator_name,parameters,z1,z2,it):
         delta = (z2-z1)/it
         focus_metric = []
+        propagation = reconstruct()
         for i in range(0,it):
             params = [z1 + i*delta] + parameters
-            hz = reconstruct(propagator_name,params)
+            hz = propagation.autocall(propagator_name,params)
             focus_metric[i] = np.sum(np.abs(hz))
         min = np.argmin(focus_metric)
         d = z1 + min * delta

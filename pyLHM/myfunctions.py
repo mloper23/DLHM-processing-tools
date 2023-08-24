@@ -8,39 +8,66 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 from PIL import Image
 from scipy.signal import convolve2d
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import skimage as skm
+import xarray as xr
 
-def autofocus(propagator_name,parameters,z1,z2,it):
-    delta = (z2-z1)/it
-    focus_metric = []
-    for i in range(0,it):
-        params = [z1 + i*delta] + parameters
-        hz = reconstruct(propagator_name,params)
-        focus_metric[i] = np.sum(np.abs(hz))
-    min = np.argmin(focus_metric)
-    d = z1 + min * delta
-    return d
+class focus:
+    def manual_focus(self,propagator_name,parameters,z1,z2,it):
+        delta = (z2-z1)/it
+        M,N = np.shape(parameters[0])
+        tensor = np.zeros((M,N,it))
+        propagation = reconstruct()
+        zs = np.linspace(z1,z2,it)
+        for i in range(0,it):
+            params = [z1 + i*delta] + parameters
+            hz = propagation.autocall(propagator_name,params)
+            print(i+1)
+            tensor[:,:,i] = np.abs(hz)**2
+        data =xr.DataArray(tensor,
+                           dims=("Height","Width","z"),
+                           coords={"z":zs*1000})
+        fig = px.imshow(data,animation_frame='z',color_continuous_scale='gray')
+        fig.update_yaxes(scaleanchor='x', constrain='domain')
+        fig.update_xaxes(constrain='domain')
+        fig.show()
+
+
+    def autofocus(self,propagator_name,parameters,z1,z2,it):
+        delta = (z2-z1)/it
+        focus_metric = []
+        for i in range(0,it):
+            params = [z1 + i*delta] + parameters
+            hz = reconstruct(propagator_name,params)
+            focus_metric[i] = np.sum(np.abs(hz))
+        min = np.argmin(focus_metric)
+        d = z1 + min * delta
+        return d
 
 class reconstruct:
-    def __init__(self,propagator,parameters):
+    def autocall(self,propagator,parameters):
         self.propagator = propagator
         self.param = parameters
         if callable(getattr(self, propagator, None)):
-            self.method_name = propagator
-            print(f"'{propagator}' is a valid propagator!")
+            # print(f"'{propagator}' is a valid propagator!")
             propagator = getattr(self,propagator,None)
-            # print(len(*parameters))
-            propagator(*parameters)
-            # return propagator(*self.param)
+            try:
+                sol = propagator(*self.param)
+                return sol
+            except:
+                raise ValueError(f"'{parameters}' does not correspond to the chosen propagator")
 
         else:
             raise ValueError(f"'{propagator}'? That's not how we do things here! Check your method name.")
         
         pass
 
-    def realisticAS():
+    def realisticAS(self):
         return 0
 
-    def angularSpectrum(z, field, wavelength, pixel_pitch_in, pixel_pitch_out):
+    def angularSpectrum(self, z, field, wavelength, pixel_pitch_in, pixel_pitch_out):
         '''
         # Function from pyDHM (https://github.com/catrujilla/pyDHM)
 
@@ -73,7 +100,7 @@ class reconstruct:
         
         return out
 
-    def rayleigh1Free(z, field, wavelength, pixel_pitch_in, pixel_pitch_out, out_shape):
+    def rayleigh1Free(self, z, field, wavelength, pixel_pitch_in, pixel_pitch_out, out_shape):
         '''
         Function to cumpute the Raleygh Sommerfeld 1 diffraction integral wothout approximations or the use of FFT,
         but allowing to change the output sampling (pixel pitch and shape).
@@ -135,7 +162,7 @@ class reconstruct:
         Viewing_window = [-x_out_lim,x_out_lim,-y_out_lim,y_out_lim]
         return U0,Viewing_window
 
-    def convergentSAASM(z, field, wavelength, pixel_pitch_in, pixel_pitch_out):
+    def convergentSAASM(self,z, field, wavelength, pixel_pitch_in, pixel_pitch_out):
         '''
         Function to diffract a complex field using the angular spectrum approach with a Semi-Analytical spherical wavefront.
         This operator only works for convergent fields.
@@ -284,10 +311,10 @@ class reconstruct:
         # half_size3 = [int(np.shape(E_out)[0]/2),int(np.shape(E_out)[1]/2)]
         # E_out = E_out[half_size3[0]-int(M/2):half_size3[0]+int(M/2),half_size3[1]-int(N/2):half_size3[1]+int(N/2)]
         # E_out = E_out[half_size3[0]-int(5017/2):half_size3[0]+int(5017/2),half_size3[1]-int(5017/2):half_size3[1]+int(5017/2)]
-        print('Output pixel pitch: ',pixel_pitch_out[0]* 10**6,'um')
+        # print('Output pixel pitch: ',pixel_pitch_out[0]* 10**6,'um')
         return E_out
 
-    def kreuzer3F(z, field, wavelength, pixel_pitch_in, pixel_pitch_out, L, FC):
+    def kreuzer3F(self, z, field, wavelength, pixel_pitch_in, pixel_pitch_out, L, FC):
         dx = pixel_pitch_in[0]
         dX = pixel_pitch_out[0]
         # Squared pixels
@@ -381,6 +408,29 @@ def open_image(file_path):
     im = Image.open(file_path).convert('L')
     im = np.asarray(im)/255
     return im
+
+def complex_show(U):
+    amplitude = np.abs(U)
+    amplitude = amplitude-np.amin(amplitude)
+    amplitude = amplitude*255/np.amax(amplitude)
+    amplitude = skm.color.gray2rgb(amplitude)
+    amplitude = go.Image(z=amplitude)
+    
+    phase = np.angle(U)
+    phase = phase-np.amin(phase)
+    phase = phase*255/np.amax(phase)
+    phase = skm.color.gray2rgb(phase)
+    phase = go.Image(z=phase)
+    fig = make_subplots(rows=1,cols=2,subplot_titles=("Amplitude","Phase"))
+    fig.add_trace(
+        amplitude,row=1,col=1
+    )
+    fig.add_trace(
+        phase,row=1,col=2
+    )
+    fig.show()
+    return fig
+
 
 # def reconstruct(propagator_name,parameters):
     

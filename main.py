@@ -21,23 +21,30 @@ import plotly.express as px
 
 
 # Reconstruction parameters
-holo = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\USAF PLUGIN\Holo_411_3500_5_1_1.bmp"                         # Hologram path
+holo = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\PLUGIN\Holo_411_3500_5_1_1.bmp"                         # Hologram path
+ref = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\PLUGIN\usaf_ref.bmp"
+# holo = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\PLUGIN\Holo_633_3500_5_1_1.bmp"                         # Hologram path
+# ref = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\PLUGIN\ref.bmp"
 wvl = 411e-9                       # wavelength [m]
-rec_dis = 2.15e-3                     # Reconstruction distance [m]
+rec_dis = 2.15e-3                  # Reconstruction distance [m]
 So_sc = 5e-3                       # L parameter in the microscope setup [m]
 in_width = 1e-3                    # Width of the input plane[m]
 in_height = in_width               # Height of the input plane [m]
 
 #------------------------------ Asumptions from the geometry----------------------------------
-Magn = So_sc/(So_sc-rec_dis)       # Magnification of the microscope system (L/Z) [#]
-out_width = Magn*in_width          # Width of the output plane [m]
-out_height = Magn*in_height        # Height of the output plane [m]
+# Magn = So_sc/(So_sc-rec_dis)       # Magnification of the microscope system (L/Z) [#]
+Magn = 1
+out_width = in_width/Magn          # Width of the output plane [m]
+out_height = in_height/Magn        # Height of the output plane [m]
 
 
 
 
 #------------------------------ Library parameters preparation ----------------------------
-holo = LHM.open_image(holo)
+holo = LHM.open_image(holo)-LHM.open_image(ref)
+# holo = LHM.open_image(holo)
+
+
 M,N = np.shape(holo)
 input_pitch = [in_width/N,in_height/M]
 output_pitch = [out_width/N,out_height/M]
@@ -49,7 +56,7 @@ solution = propagator.autocall('convergentSAASM',parameters)
 
 # im = LHM.complex_show(solution)
 focusing = LHM.focus()
-focusing.manual_focus('convergentSAASM',focus_params,2.13e-3,2.2e-3,10)
+focusing.manual_focus('convergentSAASM',focus_params,1.5e-3,2.5e-3,10)
 # fig = px.imshow(np.angle(solution),color_continuous_scale='gray')
 # fig.show()
 

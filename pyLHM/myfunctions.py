@@ -19,23 +19,26 @@ class focus:
     def manual_focus(self, propagator_name, parameters, z1, z2, it):
         delta = (z2 - z1) / it
         M,N = np.shape(parameters[0])
-        # tensor = np.zeros((int(M/2),int(N/2),it))
-        tensor = np.zeros((M, N, it))
+        tensor = np.zeros((int(M/2),int(N/2),it))
+        # tensor = np.zeros((M, N, it))
         propagation = reconstruct()
         zs = np.linspace(z1, z2, it)
         for i in range(0, it):
             params = [z1 + i * delta] + parameters
             hz = propagation.autocall(propagator_name, params)
+            amp = np.abs(hz)**2
+            amp = amp[int(M/4):int(M/2 + (M/4)),int(N/4):int(N/2 + (N/4))]
             print(i+1)
             # tensor[:,:,i] = np.resize(np.abs(hz)**2,(int(M/2),int(N/2)))
-            tensor[:,:,i] = np.abs(hz)**2
+            tensor[:,:,i] = amp
         data =xr.DataArray(tensor,
                            dims=("Height","Width","z"),
-                           coords={"z":zs*1000})
+                           coords={"z":np.round(zs*1000,decimals=3)})
         fig = px.imshow(data,animation_frame='z',color_continuous_scale='gray')
         fig.update_yaxes(scaleanchor='x', constrain='domain')
         fig.update_xaxes(constrain='domain')
-        fig.show()
+        # fig.show()
+        fig.write_html(r'images\manual_focus.html')    
 
     def autofocus(self,propagator_name,parameters,z1,z2,it):
         delta = (z2-z1)/it
@@ -80,7 +83,7 @@ class reconstruct:
         
         pass
 
-    def realisticDLHM(self, sample, L, z, w_c, lamb, pinhole, it_ph, bits):
+    def realisticDLHM(self, sample, L, z, w_c, wavelength, pinhole, it_ph, bits):
         N, M = sample.shape
         mag = L / z
         w_s = w_c / mag
@@ -108,12 +111,11 @@ class reconstruct:
             # sample_ = sample_M[round(N * mag / 2 - N / 2 - y_unit[i]):round(N * mag / 2 + N / 2 - y_unit[i]),
             #           round(M * mag / 2 - M / 2 - x_unit[i]):round(M * mag / 2 + M / 2 - x_unit[i])]
             sample_ = sample
-            Ui = self.AS(sample_, 2*np.pi/lamb, fx, fy, L-z)
-            ps_ = self.point_src(M, L, x_unit[i] * w_s / N, y_unit[i] * w_s /N, lamb, w_c/N)
+            Ui = self.AS(sample_, 2*np.pi/wavelength, fx, fy, L-z)
+            ps_ = self.point_src(M, L, x_unit[i] * w_s / N, y_unit[i] * w_s /N, wavelength, w_c/N)
             ps = ps + ps_
             holo = holo + Ui
-        # return holo, ref
-
+        
         holo = np.abs(holo) ** 2
         camMat = np.array([[N, 0, N/2], [0, M, M/2], [0, 0, 1]])
         dist = np.array([-NA*0.1, 0, 0, 0])
@@ -327,7 +329,7 @@ class reconstruct:
         # half_size3 = [int(np.shape(E_out)[0]/2),int(np.shape(E_out)[1]/2)]
         # E_out = E_out[half_size3[0]-int(M/2):half_size3[0]+int(M/2),half_size3[1]-int(N/2):half_size3[1]+int(N/2)]
         # E_out = E_out[half_size3[0]-int(5017/2):half_size3[0]+int(5017/2),half_size3[1]-int(5017/2):half_size3[1]+int(5017/2)]
-        print('Output pixel pitch: ', pixel_pitch_out[0] * 10 ** 6, 'um')
+        # print('Output pixel pitch: ', pixel_pitch_out[0] * 10 ** 6, 'um')
         return E_out
 
     def kreuzer3F(self, z, field, wavelength, pixel_pitch_in, pixel_pitch_out, L, FC):
@@ -384,6 +386,37 @@ class reconstruct:
         K = K[pad + 1:pad + row, pad + 1: pad + row]
 
         return K
+
+    def angularSpectrum(self, z, field, wavelength, pixel_pitch_in, pixel_pitch_out):
+        '''
+        # Function from pyDHM (https://github.com/catrujilla/pyDHM)
+        # Function to diffract a complex field using the angular spectrum approach
+        # Inputs:
+        # field - complex field
+        # z - propagation distance
+        # wavelength - wavelength
+        # dx/dy - sampling pitches
+        '''
+        M, N = np.shape(field)
+        x = np.arange(0, N, 1)  # array x
+        y = np.arange(0, M, 1)  # array y
+        X, Y = np.meshgrid(x - (N / 2), y - (M / 2), indexing='xy')
+        dfx = 1 / (pixel_pitch_in[0] * M)
+        dfy = 1 / (pixel_pitch_in[1] * N)
+        
+        field_spec = np.fft.fftshift(field)
+        field_spec = np.fft.fft2(field_spec)
+        field_spec = np.fft.fftshift(field_spec)
+            
+        phase = np.exp2(1j * z * np.pi * np.sqrt(np.power(1/wavelength, 2) - (np.power(X * dfx, 2) + np.power(Y * dfy, 2))))
+        
+        tmp = field_spec*phase
+        
+        out = np.fft.ifftshift(tmp)
+        out = np.fft.ifft2(out)
+        out = np.fft.ifftshift(out)
+
+        return out
 
     def AS(self, U0, k, fx, fy, z):
         E = np.exp(-1j * z * np.sqrt(k ** 2 - 4 * np.pi * (fx ** 2 + fy ** 2)))
@@ -497,10 +530,12 @@ def open_image(file_path):
     im = np.asarray(im) / 255
     return im
 
-def complex_show(U):
+def complex_show(U,negative=False):
     amplitude = np.abs(U)
     amplitude = amplitude-np.amin(amplitude)
     amplitude = amplitude*255/np.amax(amplitude)
+    if negative==True:
+        amplitude = 255-amplitude
     amplitude = skm.color.gray2rgb(amplitude)
     amplitude = go.Image(z=amplitude)
     
@@ -516,7 +551,7 @@ def complex_show(U):
     fig.add_trace(
         phase,row=1,col=2
     )
-    fig.show()
+    fig.write_html(r'images\complex_show.html')
     return fig
 
 

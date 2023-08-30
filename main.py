@@ -26,7 +26,7 @@ ref = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\PLUGIN\usaf_ref.bm
 # holo = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\PLUGIN\Holo_633_3500_5_1_1.bmp"                         # Hologram path
 # ref = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\PLUGIN\ref.bmp"
 wvl = 411e-9                       # wavelength [m]
-rec_dis = 2.15e-3                  # Reconstruction distance [m]
+rec_dis = 2.164e-3                  # Reconstruction distance [m]
 So_sc = 5e-3                       # L parameter in the microscope setup [m]
 in_width = 1e-3                    # Width of the input plane[m]
 in_height = in_width               # Height of the input plane [m]
@@ -54,9 +54,9 @@ focus_params = [holo, wvl, input_pitch, output_pitch]
 propagator = LHM.reconstruct()
 solution = propagator.autocall('convergentSAASM',parameters)
 
-# im = LHM.complex_show(solution)
-focusing = LHM.focus()
-focusing.manual_focus('convergentSAASM',focus_params,1.5e-3,2.5e-3,10)
+im = LHM.complex_show(solution[200:800,200:800])
+# focusing = LHM.focus()
+# focusing.manual_focus('convergentSAASM',focus_params,2.16e-3,2.18e-3,11)
 # fig = px.imshow(np.angle(solution),color_continuous_scale='gray')
 # fig.show()
 

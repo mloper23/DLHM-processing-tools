@@ -1,9 +1,10 @@
 # DISTORTION: For more information look at https://www.edmundoptics.com/knowledge-center/application-notes/imaging/distortion/
 # RESOLUTION: Measurement of the MTF (Take different profiles in the USAF groups to get an uncertainty)
 # CONTRAST: Measure sharpness in a certain area
-# NOISE: Std deviation of the background: An alternative is https://stackoverflow.com/questions/2440504/noise-estimation-noise-measurement-in-image 
+# NOISE: What is background? Std deviation of the background: An alternative is https://stackoverflow.com/questions/2440504/noise-estimation-noise-measurement-in-image 
 # RECONSTRUCTION TIME: Timer on each propagator
 # DISTANCE: Percentage error in the reconstruction distance for the focused image
+# PHASE SENSITIVITY: Yet to be discussed
 
 import pyLHM.myfunctions as lhm
 import numpy as np

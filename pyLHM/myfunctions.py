@@ -38,7 +38,8 @@ class focus:
         fig.update_yaxes(scaleanchor='x', constrain='domain')
         fig.update_xaxes(constrain='domain')
         # fig.show()
-        fig.write_html(r'images\manual_focus.html')    
+        fig.write_html(r'images\manual_focus.html')
+        return data    
 
     def autofocus(self,propagator_name,parameters,z1,z2,it):
         delta = (z2-z1)/it
@@ -83,8 +84,8 @@ class reconstruct:
         
         pass
 
-    def realisticDLHM(self, sample, L, z, w_c, wavelength, pinhole, it_ph, bits):
-        N, M = sample.shape
+    def realisticDLHM(self, field, wavelength, L, z, w_c, pinhole, it_ph, bits):
+        N, M = field.shape
         mag = L / z
         w_s = w_c / mag
         rad_ph = np.round(pinhole * N / w_s)
@@ -110,7 +111,7 @@ class reconstruct:
         for i in range(0, it_ph):
             # sample_ = sample_M[round(N * mag / 2 - N / 2 - y_unit[i]):round(N * mag / 2 + N / 2 - y_unit[i]),
             #           round(M * mag / 2 - M / 2 - x_unit[i]):round(M * mag / 2 + M / 2 - x_unit[i])]
-            sample_ = sample
+            sample_ = field
             Ui = self.AS(sample_, 2*np.pi/wavelength, fx, fy, L-z)
             ps_ = self.point_src(M, L, x_unit[i] * w_s / N, y_unit[i] * w_s /N, wavelength, w_c/N)
             ps = ps + ps_
@@ -258,7 +259,8 @@ class reconstruct:
         xin = (x - (N / 2)) * pp0
         yin = (y - (M / 2)) * pp0
         inter = RegularGridInterpolator((xin, yin), field, bounds_error=False, fill_value=None)
-        E_interpolated = inter((X1, Y1))
+        # E_interpolated = inter((X1, Y1))
+        E_interpolated = field
 
         MR1 = (X1 ** 2 + Y1 ** 2)
         k_interm = (k_wl / kmax)
@@ -523,7 +525,19 @@ class metrics:
         sigma = np.sum(np.sum(np.absolute(convolve2d(I, M))))
         sigma = sigma * np.sqrt(0.5 * np.pi) / (6 * (W - 2) * (H - 2))
         return sigma
-
+    
+    def measure_resolution(self,I):
+        return 0
+    
+    def measure_distortion(self,I):
+        return 0
+    
+    def measure_contrast(self,I):
+        return 0
+    
+    def measure_phase_sensitivity(self,I):
+        return 0
+    
 
 def open_image(file_path):
     im = Image.open(file_path).convert('L')
@@ -554,7 +568,27 @@ def complex_show(U,negative=False):
     fig.write_html(r'images\complex_show.html')
     return fig
 
+def norm(array):
+        array = array-np.amin(array)
+        array = array/np.amax(array)
+        return array
 
+def save_gif(xarray):
+    # Load your xarray data (replace this with your actual xarray)
+    
+    # Initialize an empty list to store PIL Image objects
+    image_list = []
+
+    # Loop through the xarray to convert each 2D array to a PIL Image
+    for i in range(len(xarray["z"])):
+        img_array = norm(xarray.isel(z=i).values)
+        img_array = (img_array * 255).astype(np.uint8)  # Convert to 8-bit pixel values
+        img = Image.fromarray(img_array, "L")  # "L" means grayscale
+        image_list.append(img)
+
+    # Save as an animated GIF
+    image_list[0].save("animated.gif",
+                    save_all=True, append_images=image_list[1:], loop=0, duration=200)
 
 
 

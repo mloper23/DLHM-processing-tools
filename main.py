@@ -6,7 +6,7 @@ import pyLHM.myfunctions as LHM
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-
+import imageio as io
 
 # def print_hi(name):
 #     # Use a breakpoint in the code line below to debug your script.
@@ -41,7 +41,7 @@ out_height = in_height/Magn        # Height of the output plane [m]
 
 
 #------------------------------ Library parameters preparation ----------------------------
-holo = LHM.open_image(holo)-LHM.open_image(ref)
+holo = LHM.open_image(ref)-LHM.open_image(holo)
 # holo = LHM.open_image(holo)
 
 
@@ -53,10 +53,13 @@ parameters = [rec_dis, holo, wvl, input_pitch, output_pitch]
 focus_params = [holo, wvl, input_pitch, output_pitch]
 propagator = LHM.reconstruct()
 solution = propagator.autocall('convergentSAASM',parameters)
+M,N = np.shape(solution)
 
-im = LHM.complex_show(solution[200:800,200:800])
-# focusing = LHM.focus()
-# focusing.manual_focus('convergentSAASM',focus_params,2.16e-3,2.18e-3,11)
+# im = LHM.complex_show(solution[int(M/4):int(3*M/4),int(N/4):int(3*N/4)],negative=False)
+focusing = LHM.focus()
+# xar = focusing.manual_focus('angularSpectrum',focus_params,5.6e-3,6.6e-3,11)
+# gif = LHM.save_gif(xar)
+focusing.manual_focus('convergentSAASM',focus_params,2.16e-3,2.18e-3,11)
 # fig = px.imshow(np.angle(solution),color_continuous_scale='gray')
 # fig.show()
 

@@ -13,9 +13,16 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import skimage as skm
 import xarray as xr
-import cv2 as cv
+import cv2
 
 class focus:
+    def __init__(self,mode= None ):
+        if mode == 'amp' or mode == None:
+            self.mode = 'amplitude'
+        elif mode=='phase':
+            self.mode = 'phase'
+    
+
     def manual_focus(self, propagator_name, parameters, z1, z2, it):
         delta = (z2 - z1) / it
         M,N = np.shape(parameters[0])
@@ -26,11 +33,15 @@ class focus:
         for i in range(0, it):
             params = [z1 + i * delta] + parameters
             hz = propagation.autocall(propagator_name, params)
-            amp = np.abs(hz)**2
-            amp = amp[int(M/4):int(M/2 + (M/4)),int(N/4):int(N/2 + (N/4))]
+            if self.mode =='amplitude':
+                amp = np.abs(hz)**2
+                img = amp[int(M/4):int(M/2 + (M/4)),int(N/4):int(N/2 + (N/4))]
+            elif self.mode == 'phase':
+                phase = np.angle(hz)
+                img = phase[int(M/4):int(M/2 + (M/4)),int(N/4):int(N/2 + (N/4))]
             print(i+1)
             # tensor[:,:,i] = np.resize(np.abs(hz)**2,(int(M/2),int(N/2)))
-            tensor[:,:,i] = amp
+            tensor[:,:,i] = img
         data =xr.DataArray(tensor,
                            dims=("Height","Width","z"),
                            coords={"z":np.round(zs*1000,decimals=3)})
@@ -84,6 +95,54 @@ class reconstruct:
         
         pass
 
+    def realistic_rec_DLHM(self, rec_dis, field, wavelength, pixel_pitch_in, L, pinhole, it_ph, bits):
+        z = L - rec_dis
+        N, M = field.shape
+        w_c = pixel_pitch_in[0]*M
+        mag = L / z
+        w_s = w_c / mag
+        rad_ph = np.round(pinhole * N / w_s)
+        th = np.linspace(0, 2 * np.pi, it_ph)
+        x_unit = np.round(rad_ph / 2 * np.cos(np.deg2rad(th)))
+        y_unit = np.round(rad_ph / 2 * np.sin(np.deg2rad(th)))
+
+        NA = (w_c / 2) / (np.sqrt(w_c / 2) ** 2 + L ** 2)
+
+        holo = np.zeros([N, M])
+        ps = holo.copy()
+
+        # sample_M = np.array(cv.resize(sample, [round(N * mag), round(M * mag)])).astype('float')
+        x = np.linspace(-w_c / 2, w_c / 2, N)
+        y = np.linspace(-w_c / 2, w_c / 2, M)
+        u, v = np.meshgrid(x, y)
+        r = np.sqrt(u ** 2 + v ** 2 + (L-z) ** 2)
+        df = 1/w_s
+        dfix = np.linspace(-N/2 * df, N/2 * df, M)
+        dfiy = np.linspace(-M/2 * df, M/2 * df, M)
+        fx, fy = np.meshgrid(dfix, dfiy)
+
+        for i in range(0, it_ph):
+            # sample_ = sample_M[round(N * mag / 2 - N / 2 - y_unit[i]):round(N * mag / 2 + N / 2 - y_unit[i]),
+            #           round(M * mag / 2 - M / 2 - x_unit[i]):round(M * mag / 2 + M / 2 - x_unit[i])]
+            sample_ = field
+            Ui = self.AS(sample_, 2*np.pi/wavelength, fx, fy, L-z)
+            ps_ = self.point_src(M, L, x_unit[i] * w_s / N, y_unit[i] * w_s /N, wavelength, w_c/N)
+            ps = ps + ps_
+            holo = holo + Ui
+        
+        holo = np.abs(holo) ** 2
+        camMat = np.array([[N, 0, N/2], [0, M, M/2], [0, 0, 1]])
+        dist = np.array([-NA*0.1, 0, 0, 0])
+        holo = cv2.undistort(holo, camMat, dist)
+
+        holo = holo * (1 - r/r.max())
+        holo = self.norm_bits(holo, bits)
+
+        ref = np.abs(1-r/r.max()) ** 2
+        ref = self.norm_bits(ref, bits)
+
+        return holo, ref
+
     def realisticDLHM(self, field, wavelength, L, z, w_c, pinhole, it_ph, bits):
         N, M = field.shape
         mag = L / z
@@ -120,7 +179,7 @@ class reconstruct:
         holo = np.abs(holo) ** 2
         camMat = np.array([[N, 0, N/2], [0, M, M/2], [0, 0, 1]])
         dist = np.array([-NA*0.1, 0, 0, 0])
-        holo = cv.undistort(holo, camMat, dist)
+        holo = cv2.undistort(holo, camMat, dist)
 
         holo = holo * (1 - r/r.max())
         holo = self.norm_bits(holo, bits)
@@ -185,7 +244,7 @@ class reconstruct:
                 # print('Tiempo de ejecución: ', 1000*(stop-start))
         U0 = -U0 / (2 * np.pi)
         Viewing_window = [-x_out_lim, x_out_lim, -y_out_lim, y_out_lim]
-        return U0, Viewing_window
+        return U0
 
     def convergentSAASM(self, z, field, wavelength, pixel_pitch_in, pixel_pitch_out):
         '''
@@ -334,13 +393,15 @@ class reconstruct:
         # print('Output pixel pitch: ', pixel_pitch_out[0] * 10 ** 6, 'um')
         return E_out
 
-    def kreuzer3F(self, z, field, wavelength, pixel_pitch_in, pixel_pitch_out, L, FC):
+    def kreuzer3F(self, z_prop, field, wavelength, pixel_pitch_in, pixel_pitch_out, L):
+        z = z_prop
         dx = pixel_pitch_in[0]
         dX = pixel_pitch_out[0]
         # Squared pixels
         deltaY = dX
         # Matrix size
         [row, a] = field.shape
+        FC = self.filtcosenoF(100, row,0)
         # Parameters
         k = 2 * np.pi / wavelength
         W = dx * row
@@ -530,7 +591,54 @@ class metrics:
         return 0
     
     def measure_distortion(self,I):
-        return 0
+        kernel = np.array([[0.88,0.26,0.04,0.26,0.88],
+                           [0.26,0.0, 0.0, 0.0,0.27],
+                           [0.05,0.0, 0.0, 0.0,0.05],
+                           [0.26,0.0, 0.0, 0.0,0.27],
+                           [0.88,0.26,0.043,0.26,0.88]])
+        I = np.uint8(I*255)
+        grayImage = cv2.cvtColor(I, cv2.COLOR_GRAY2BGR)
+        grayImage = cv2.filter2D(grayImage, -1, kernel)
+        
+        _, thr = cv2.threshold(grayImage,150,255, cv2.THRESH_BINARY_INV)
+        thr = cv2.cvtColor(thr, cv2.COLOR_BGR2GRAY)
+        contours, hierarchy = cv2.findContours(image=thr, mode=cv2.RETR_TREE,method=cv2.CHAIN_APPROX_SIMPLE)
+        image_copy = grayImage.copy()
+        cntmax = 0
+        centroids = []
+        rmax = 0
+        for cnt in contours:
+            # Calculate moments
+            M = cv2.moments(cnt)
+            
+            # Calculate centroid
+            if M["m00"] != 0:
+                cX = int(M["m10"] / M["m00"])
+                cY = int(M["m01"] / M["m00"])
+            else:
+                cX, cY = 0, 0
+            
+            r = cX**2 + cY**2
+            if r>rmax:
+                cntmax = cnt
+                rmax = r
+                cXm = cX
+                cYm = cY
+            centroids.append((cX, cY))
+        center = (cXm,cYm)
+        ideal_center = (903,903)
+        distortion = np.sqrt((center[0]-ideal_center[0])**2 + (center[1]-ideal_center[1])**2)
+
+        cv2.drawContours(image=image_copy, contours=cntmax, contourIdx=-1, color=(255, 0, 0), thickness=2, lineType=cv2.LINE_AA)
+        cv2.circle(image_copy, center, radius=5, color=(0, 0, 255), thickness=-1)
+        cv2.circle(image_copy, ideal_center, radius=5, color=(0, 255, 0), thickness=-1)         
+        # see the results
+        resized_image = cv2.resize(image_copy, (512,512), interpolation=cv2.INTER_AREA)
+        cv2.imshow('None approximation', resized_image)
+        cv2.waitKey(0)
+
+
+        return distortion,(cXm,cYm)
     
     def measure_contrast(self,I):
         return 0
@@ -543,6 +651,13 @@ def open_image(file_path):
     im = Image.open(file_path).convert('L')
     im = np.asarray(im) / 255
     return im
+
+def save_image(I, filename):
+    I = I - np.amin(I)
+    I = I / np.amax(I)
+    I = Image.fromarray(np.uint8(I*255))
+    path = r"images/"+filename
+    I.save(path)
 
 def complex_show(U,negative=False):
     amplitude = np.abs(U)

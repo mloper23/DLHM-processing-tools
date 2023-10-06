@@ -83,6 +83,7 @@ class reconstruct:
         
         pass
 
+
     def realisticDLHM(self, sample, L, z, w_c, wavelength, pinhole, it_ph, bits):
         N, M = sample.shape
         mag = L / z
@@ -332,9 +333,47 @@ class reconstruct:
         # print('Output pixel pitch: ', pixel_pitch_out[0] * 10 ** 6, 'um')
         return E_out
 
+
+    def prepairholoF(self, CH_m, xop, yop, Xp, Yp):
+        # User function to prepare the hologram using nearest neihgboor interpolation strategy
+        [row, a] = CH_m.shape
+        # New coordinates measured in units of the -2*xop/row pixel size
+        Xcoord = (Xp - xop) / (-2 * xop / row)
+        Ycoord = (Yp - yop) / (-2 * xop / row)
+        # Find lowest integer
+        iXcoord = np.floor(Xcoord)
+        iYcoord = np.floor(Ycoord)
+        # Assure there isn't null pixel positions
+        iXcoord[iXcoord == 0] = 1
+        iYcoord[iYcoord == 0] = 1
+        # Calculate the fractionating for interpolation
+        x1frac = (iXcoord + 1.0) - Xcoord  # Upper value to integer
+        x2frac = 1.0 - x1frac
+        y1frac = (iYcoord + 1.0) - Ycoord  # Lower value to integer
+        y2frac = 1.0 - y1frac
+        x1y1 = x1frac * y1frac  # Corresponding pixel areas for each direction
+        x1y2 = x1frac * y2frac
+        x2y1 = x2frac * y1frac
+        x2y2 = x2frac * y2frac
+        # Pre allocate the prepared hologram
+        CHp_m = np.zeros([row, row])
+        # Prepare hologram (preparation - every pixel remapping)
+        for it in range(0, row - 2):
+            for jt in range(0, row - 2):
+                CHp_m[int(iYcoord[it, jt]), int(iXcoord[it, jt])] = CHp_m[int(iYcoord[it, jt]), int(iXcoord[it, jt])] + (
+                    x1y1[it, jt]) * CH_m[it, jt]
+                CHp_m[int(iYcoord[it, jt]), int(iXcoord[it, jt]) + 1] = CHp_m[int(iYcoord[it, jt]), int(
+                    iXcoord[it, jt]) + 1] + (x2y1[it, jt]) * CH_m[it, jt]
+                CHp_m[int(iYcoord[it, jt]) + 1, int(iXcoord[it, jt])] = CHp_m[int(iYcoord[it, jt]) + 1, int(
+                    iXcoord[it, jt])] + (x1y2[it, jt]) * CH_m[it, jt]
+                CHp_m[int(iYcoord[it, jt]) + 1, int(iXcoord[it, jt]) + 1] = CHp_m[int(iYcoord[it, jt]) + 1, int(
+                    iXcoord[it, jt]) + 1] + (x2y2[it, jt]) * CH_m[it, jt]
+
+        return CHp_m
+
     def kreuzer3F(self, z, field, wavelength, pixel_pitch_in, pixel_pitch_out, L, FC):
-        dx = pixel_pitch_in[0]
-        dX = pixel_pitch_out[0]
+        dx = pixel_pitch_in
+        dX = pixel_pitch_out
         # Squared pixels
         deltaY = dX
         # Matrix size
@@ -422,51 +461,14 @@ class reconstruct:
         E = np.exp(-1j * z * np.sqrt(k ** 2 - 4 * np.pi * (fx ** 2 + fy ** 2)))
         Uz = self.ifts(self.fts(U0) * E)
         return Uz
-
-    def prepairholoF(self, CH_m, xop, yop, Xp, Yp):
-        # User function to prepare the hologram using nearest neihgboor interpolation strategy
-        [row, a] = CH_m.shape
-        # New coordinates measured in units of the -2*xop/row pixel size
-        Xcoord = (Xp - xop) / (-2 * xop / row)
-        Ycoord = (Yp - yop) / (-2 * xop / row)
-        # Find lowest integer
-        iXcoord = np.floor(Xcoord)
-        iYcoord = np.floor(Ycoord)
-        # Assure there isn't null pixel positions
-        iXcoord[iXcoord == 0] = 1
-        iYcoord[iYcoord == 0] = 1
-        # Calculate the fractionating for interpolation
-        x1frac = (iXcoord + 1.0) - Xcoord  # Upper value to integer
-        x2frac = 1.0 - x1frac
-        y1frac = (iYcoord + 1.0) - Ycoord  # Lower value to integer
-        y2frac = 1.0 - y1frac
-        x1y1 = x1frac * y1frac  # Corresponding pixel areas for each direction
-        x1y2 = x1frac * y2frac
-        x2y1 = x2frac * y1frac
-        x2y2 = x2frac * y2frac
-        # Pre allocate the prepared hologram
-        CHp_m = np.zeros([row, row])
-        # Prepare hologram (preparation - every pixel remapping)
-        for it in range(0, row - 2):
-            for jt in range(0, row - 2):
-                CHp_m[int(iYcoord[it, jt]), int(iXcoord[it, jt])] = CHp_m[int(iYcoord[it, jt]), int(iXcoord[it, jt])] + (
-                    x1y1[it, jt]) * CH_m[it, jt]
-                CHp_m[int(iYcoord[it, jt]), int(iXcoord[it, jt]) + 1] = CHp_m[int(iYcoord[it, jt]), int(
-                    iXcoord[it, jt]) + 1] + (x2y1[it, jt]) * CH_m[it, jt]
-                CHp_m[int(iYcoord[it, jt]) + 1, int(iXcoord[it, jt])] = CHp_m[int(iYcoord[it, jt]) + 1, int(
-                    iXcoord[it, jt])] + (x1y2[it, jt]) * CH_m[it, jt]
-                CHp_m[int(iYcoord[it, jt]) + 1, int(iXcoord[it, jt]) + 1] = CHp_m[int(iYcoord[it, jt]) + 1, int(
-                    iXcoord[it, jt]) + 1] + (x2y2[it, jt]) * CH_m[it, jt]
-
-        return CHp_m
     
     def filtcosenoF(self, par, fi, num_fig):
         # Coordinates
         Xfc, Yfc = np.meshgrid(np.linspace(-fi / 2, fi / 2, fi), np.linspace(fi / 2, -fi / 2, fi))
 
         # Normalize coordinates [-π,π] and create horizontal and vertical filters
-        FC1 = np.cos(Xfc * (np.pi / par)) * (1 / Xfc.max()) ** 2
-        FC2 = np.cos(Yfc * (np.pi / par)) * (1 / Yfc.max()) ** 2
+        FC1 = np.cos(Xfc * (np.pi / par) * (1 / Xfc.max())) ** 2
+        FC2 = np.cos(Yfc * (np.pi / par) * (1 / Yfc.max())) ** 2
 
         # Intersection
         FC = (FC1 > 0) * (FC1) * (FC2 > 0) * (FC2)

@@ -10,7 +10,9 @@ from PIL import Image
 from scipy.signal import convolve2d
 import plotly.express as px
 import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 from plotly.subplots import make_subplots
+import pandas as pd
 import skimage as skm
 import xarray as xr
 import cv2
@@ -395,160 +397,261 @@ class reconstruct:
         # print('Output pixel pitch: ', pixel_pitch_out[0] * 10 ** 6, 'um')
         return E_out
 
-    def convergentSAASM_pad(self, z, field, wavelength, pixel_pitch_in, pixel_pitch_out):
-        '''
-        Function to diffract a complex field using the angular spectrum approach with a Semi-Analytical spherical wavefront.
-        This operator only works for convergent fields.
-        For further reference review: https://opg.optica.org/josaa/abstract.cfm?uri=josaa-31-3-591 and https://doi.org/10.1117/12.2642760
-        
-        ### Inputs:
-        * field - complex field to be diffracted
-        * z - propagation distance
-        * wavelength - wavelength of the light used
-        * pixel_pitch_in - Sampling pitches of the input field as a (2,) list
-        * pixel_pitch_out - Sampling pitches of the output field as a (2,) list
-        '''
-
-        # Starting cooridnates computation
-        k_wl = 2 * np.pi / wavelength
-        M, N = field.shape
+    def convergentSAASM_full(self, z, field, wavelength, L, w_c):
+        zp = L-z
+        Magn = L/z
+        k_wvl = 2*np.pi/wavelength
+        N,M = np.shape(field)
         pad = int(M/2)
-        # Linear Coordinates
-        x = np.arange(0, N, 1)  # array x
-        fx = np.fft.fftshift(np.fft.fftfreq(N, pixel_pitch_in[0]))
-        y = np.arange(0, M, 1)  # array y
-        fy = np.fft.fftshift(np.fft.fftfreq(M, pixel_pitch_in[1]))
-        # Grids
-        X_in, Y_in = np.meshgrid((x - (N / 2)) * pixel_pitch_in[0], (y - (M / 2)) * pixel_pitch_in[1], indexing='xy')
-        FX, FY = np.meshgrid(fx, fy, indexing='xy')
-        KX = FX * 2 * np.pi
-        KY = FY * 2 * np.pi
-        MR_in = (X_in ** 2 + Y_in ** 2)
-        MK = np.sqrt(KX ** 2 + KY ** 2)
-        kmax = np.abs(np.amax(MK))
+        # E1i = np.abs(self.ifts(np.pad(self.fts(field),((pad,pad),(pad,pad)))))**2
+        E1i = field
+        N,M = np.shape(E1i)
+        xc = np.linspace(-w_c/2,w_c/2,M)
+        yc = np.linspace(-w_c/2,w_c/2,N)
+        fxc = np.fft.fftshift(np.fft.fftfreq(M,w_c/M))
+        fyc = np.fft.fftshift(np.fft.fftfreq(N,w_c/N))
+        Xc,Yc = np.meshgrid(xc,yc,indexing='xy')
+        FXC,FYC = np.meshgrid(fxc,fyc,indexing='xy')
+        kmax = np.amax(2 * np.pi * np.sqrt(FXC**2 + FYC**2))
+        k_int = k_wvl/kmax
+        c = (2/3 *k_int)+(2/3 * np.sqrt(k_int-0.5))+(1/3 * np.sqrt(k_int**2-1))
+        d = 1/3 * np.sqrt(k_int**2-1) - k_wvl/kmax
+        gammaf = -kmax/(2*d*L)
+        
+        xcgamma = gammaf*xc
+        ycgamma = gammaf*yc
 
-        ''' IN THIS STEP THE FIRST FOURIER TRANSFORM OF THE FIELD IS CALCULATED DOING A RESAMPLING USING THE
-        FAST FOURIER TRASNSFORM AND A PADDING. THIS TRANSFORM HAS AS OUTPUT COORDINATE THE SCALED COORDINATE
-        BETA, THAT IS NOT RELEVANT FOR THIS STEP BUT THE NEXT ONE'''
-        # Fitting parameters for the parabolic fase
-        k_interm = (k_wl / kmax)
-        c = (2 / 3 * k_interm) + 2 / 3 * np.sqrt(k_interm ** 2 - 0.5) - 1 / 3 * np.sqrt(k_interm ** 2 - 1)
-        d = np.sqrt(k_interm ** 2 - 1) - k_interm
-        pp0 = pixel_pitch_in[0]
+        inter = RegularGridInterpolator((xc, yc), E1i, bounds_error=False, fill_value=None)
+        Xint , Yint = np.meshgrid(xcgamma,ycgamma,indexing='xy')
+        # E1i = inter((Xint,Yint))
 
-        # Initial interpolation for j=1
-        max_grad_alpha = -kmax / (2 * d * z) * np.amax(MR_in)
-        alpha = (np.exp(-1j * c * kmax * z) * kmax / (2j * d * z)) * np.exp((1j * kmax * MR_in) / (4 * d * z))
 
-        # Interpolation of the input field Scipy
+        Xo = Xc/Magn
+        Yo = Yc/Magn
+        FXo,FYo = fxc = np.meshgrid(np.fft.fftshift(np.fft.fftfreq(M,w_c/(Magn*M))), np.fft.fftshift(np.fft.fftfreq(N,w_c/(Magn*N))))
+        
+        
+        alphaf = np.exp(-1j*c*kmax*L) * kmax /(2j*d*L) * np.exp(1j * (kmax*((Xint)**2+(Yint)**2)/(4*d*L)))
+        
+        E1m = gammaf **2 * np.divide(E1i,alphaf)
+        E2i = self.fts(E1m)
+        
+        # psMagn = w_c*k_wvl/(np.sqrt(2) * np.pi * Magn*M) -0.1
+        psMagn = 1
+        x = np.linspace(-w_c/2,w_c/2,M)/(psMagn*Magn)
+        y = np.linspace(-w_c/2,w_c/2,N)/(psMagn*Magn)
+        X, Y = np.meshgrid(x,y,indexing='xy')
+        FX, FY = np.meshgrid(np.fft.fftshift(np.fft.fftfreq(M,w_c/(psMagn*Magn*M))), np.fft.fftshift(np.fft.fftfreq(N,w_c/(psMagn*Magn*N))))
 
-        N2 = int(N * (2 + max_grad_alpha * pp0 / np.pi))
-        M2 = int(M * (2 + max_grad_alpha * pp0 / np.pi))
-        # M2 = 4*M
-        # N2 = 4*N
+        #_______________________________________
+        X = Xo
+        Y = Yo
+        FX = FXo
+        FY = FYo
+        #_____________________________
+        
 
-        pp1 = M * pixel_pitch_in[0] / M2
-        x1 = np.arange(0, N2 - 1, 1)
-        y1 = np.arange(0, M2 - 1, 1)
-        X1, Y1 = np.meshgrid((x1 - (N2 / 2)) * pp1, (y1 - (M2 / 2)) * pp1, indexing='ij')
-        fx1 = np.fft.fftshift(np.fft.fftfreq(N2, pp1))
-        fy1 = np.fft.fftshift(np.fft.fftfreq(M2, pp1))
-        FX1, FY1 = np.meshgrid(fx1, fy1, indexing='xy')
-        # THIS LINEs ARE FOR TRIALS ONLY
-        KX1 = FX1 * 2 * np.pi
-        KY1 = FY1 * 2 * np.pi
-        MK1 = np.sqrt(KX1 ** 2 + KY1 ** 2)
-        kmax = np.abs(np.amax(MK1))
+        kernelf = np.exp(-1j * kmax * (X**2 + Y**2)/(4*d*L))
+        E2m = np.multiply(E2i,kernelf)
+        E3i = self.fts(E2m)
+        
+        r2 = (2*np.pi*FX)**2 + (2*np.pi*FY)**2
+        # complex_show(E3i)
+        sp = np.sqrt(k_wvl**2 - r2)
+        avort = c*kmax  + d * (r2)/kmax
+        h = sp - avort
 
-        xin = (x - (N / 2)) * pp0
-        yin = (y - (M / 2)) * pp0
-        inter = RegularGridInterpolator((xin, yin), field, bounds_error=False, fill_value=None)
-        E_interpolated = inter((X1, Y1))
-        # E_interpolated = field
+        
+        
 
-        MR1 = (X1 ** 2 + Y1 ** 2)
-        k_interm = (k_wl / kmax)
-        c = (2 / 3 * k_interm) + 2 / 3 * np.sqrt(k_interm ** 2 - 0.5) - 1 / 3 * np.sqrt(k_interm ** 2 - 1)
-        d = np.sqrt(k_interm ** 2 - 1) - k_interm
 
-        alpha = np.exp(-1j * c * kmax * z) * kmax / (2j * d * z) * np.exp((1j * kmax * MR1) / (4 * d * z))
-        E_interpolated = E_interpolated - np.amin(E_interpolated)
-        E_interpolated = E_interpolated / np.amax(E_interpolated)
-        EM1 = np.divide(E_interpolated, alpha)
 
-        # Padding variables for j=2
-        # max_grad_kernel = np.amax(Mbeta)
+        # kz = 0
+        
+        exp_h = np.exp(1j*(L+zp)*h)
+        E3m = E3i * exp_h
+        E4i = self.ifts(E3m)
+        
+        
 
-        # Computation of the j=1 step
-        FE1 = np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(EM1)))
+        # Ef = self.ifts(self.fts(self.fts(np.divide(El,alphaf))*kernelf)*hf)
+        # Ef = Ef[pad+1:2*pad,pad+1:2*pad]
+        
+        kerneld = np.exp(-1j*kmax*(X**2+Y**2)/(4*d*zp))
+        E4m = E4i*kerneld
+        E4o = self.fts(E4m)
 
-        '''IN THIS STEP THE SECOND FOURIER TRANSFORM IS CALCULATED. HERE THE COORDINATES BETA ARE RELEVANT
-        SINCE THE ELEMENT-WISE PRODUCT OF THE FE1 WITH THE PROPAGATION KERNEL REQUIRES THE KERNEL'S 
-        ARGUMENT TO BE THE MAGNITUDE OF BETA INSTEAD OF THE MAGNITUD OF RHO'''
-        # Calculation of the oversampled kernel
-        M0, N0 = np.shape(FE1)
-        x2 = np.arange(0, N0, 1)
-        y2 = np.arange(0, M0, 1)
-        # If required, check the pixel size
-        # X_out, Y_out = np.meshgrid((x2 - (N0 / 2))*pp1, (y2- (M0 / 2))*pp1, indexing='xy')#<----------------------erase this
-        X_out, Y_out = np.meshgrid((x2 - (N0 / 2)) * pixel_pitch_out[0], (y2 - (M0 / 2)) * pixel_pitch_out[1],
-                                indexing='xy')
-        Mrho = np.sqrt(np.power(X_out, 2) + np.power(Y_out, 2))
-        bX = -kmax * X_out / (2 * d * z)
-        bY = -kmax * Y_out / (2 * d * z)
-        Mbeta = np.sqrt(np.power(bX, 2) + np.power(bY, 2))
-        kernel = np.exp(-1j * d * z * np.power(Mbeta, 2) / (kmax))
-        # kernel = np.exp(-1j * kmax * np.power(Mrho,2)/(4 * d * z))
-        EM2 = FE1 * kernel
+        alphad = -np.exp(1j*c*kmax*zp)*kmax/(2j*d*zp) * np.exp(-1j*kmax*(Xo**2 + Yo**2)/(4*d*zp))
+        Eo = alphad * E4o
+        # Eo = alphad * self.fts(self.ifts(self.fts(self.fts(np.divide(E1i,alphaf))*kernelf)*hf*hd)*kerneld)
+        complex_show(Eo)
+        return Eo
 
-        # Computation of the j=2 step
-        FE2 = np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(EM2)))
-        # half_size2 = [int(np.shape(FE2)[0]/2),int(np.shape(FE2)[1]/2)]
-        # FE2 = FE2[half_size2[0]-int(M/2):half_size2[0]+int(M/2),half_size2[1]-int(N/2):half_size2[1]+int(N/2)]
+    def convergentSAASM_redone(self, z, field, wavelength, L, w_c):
+        zp = L-z
+        Magn = L/z
+        k_wvl = 2*np.pi/wavelength
+        N,M = np.shape(field)
 
-        '''IN THIS STEP THE THIRD FOURIER TRANSFORM IS CALCULATED. HERE THE SUPERIOR ORDER TERMS (H) ARE CALCULATED
-        TO FIND NUMERICALLY THE MAXIMUM GRADIENT OF ITS ARGUMENT, THEN, A PADDING OF FE2 IS DONE AND FINALLY H
-        IS RESAMPLED IN TERMS OF FE2'''
-        # Calculation of the superior order phases
-        Mfin, Nfin = np.shape(FE2)
-        # ----------------ERASE THIS-----------------
-        # fx_out = np.fft.fftshift(np.fft.fftfreq(Nfin,pp1))
-        # fy_out = np.fft.fftshift(np.fft.fftfreq(Mfin,pp1))
-        # -------------------------------------------
+        pad = int((M/2))
+        
+        
+        E1i = self.ifts(np.pad(self.fts(field),((pad,pad),(pad,pad))))
 
-        fx_out = np.fft.fftshift(np.fft.fftfreq(Nfin, pixel_pitch_out[0]))
-        fy_out = np.fft.fftshift(np.fft.fftfreq(Mfin, pixel_pitch_out[1]))
-        FX_out, FY_out = np.meshgrid(fx_out, fy_out, indexing='xy')
-        KX_out = FX_out * 2 * np.pi
-        KY_out = FY_out * 2 * np.pi
-        MK_out = np.sqrt(KX_out ** 2 + KY_out ** 2)
-        taylor_no_sup = (c * kmax + d * (MK_out ** 2) / kmax)
-        etay = np.exp(1j * z * taylor_no_sup)
-        spherical_ideal = np.sqrt(k_wl ** 2 - MK_out ** 2)
-        esph = np.exp(1j * z * spherical_ideal)
-        h = spherical_ideal - taylor_no_sup
+        # E1i = field
+        N,M = np.shape(E1i)
+        xc = np.linspace(-w_c/2,w_c/2,M)
+        yc = np.linspace(-w_c/2,w_c/2,N)
+        fxc = np.fft.fftshift(np.fft.fftfreq(M,w_c/M))
+        fyc = np.fft.fftshift(np.fft.fftfreq(N,w_c/N))
+        Xc,Yc = np.meshgrid(xc,yc,indexing='xy')
+        FXC,FYC = np.meshgrid(fxc,fyc,indexing='xy')
+        
 
-        # Computation of the j=3 step
-        phase_h = np.exp(1j * z * h)
-        EM3 = FE2 * phase_h
-        E_out = np.fft.ifftshift(np.fft.ifft2(np.fft.fftshift(EM3)))
-        # half_size3 = [int(np.shape(E_out)[0]/2),int(np.shape(E_out)[1]/2)]
-        # E_out = E_out[half_size3[0]-int(M/2):half_size3[0]+int(M/2),half_size3[1]-int(N/2):half_size3[1]+int(N/2)]
-        E_out = E_out[pad+1:pad+M,pad+1:pad+N]
-        # print('Output pixel pitch: ', pixel_pitch_out[0] * 10 ** 6, 'um')
-        return E_out
-  
-    
 
-    def kreuzer3F(self, z_prop, field, wavelength, pixel_pitch_in, pixel_pitch_out, L):
+
+        kmax = np.amax(2 * np.pi * np.sqrt(FXC**2 + FYC**2))
+
+        k_int = k_wvl/kmax
+        c = (2/3 *k_int)+(2/3 * np.sqrt(k_int**2 -0.5))-(1/3 * np.sqrt(k_int**2-1))
+        d = np.sqrt(k_int**2-1) - k_int
+
+        
+        gammaf = 1
+
+        x = np.linspace(-w_c/2,w_c/2,M)/(Magn)
+        y = np.linspace(-w_c/2,w_c/2,N)/(Magn)
+        X, Y = np.meshgrid(x,y,indexing='xy')
+        FX, FY = np.meshgrid(np.fft.fftshift(np.fft.fftfreq(M,w_c/(Magn*M))), np.fft.fftshift(np.fft.fftfreq(N,w_c/(Magn*N))))
+
+        magL = 20
+        # alphaf = np.exp(-1j*c*kmax*zp) * kmax /(2j*d*zp) * np.exp(1j * (kmax*((gammaf*Xc)**2+(gammaf*Yc)**2)/(4*d*zp)))
+        alphaf = np.exp(-1j*c*kmax*zp*magL) * kmax /(2j*d*zp*magL) * np.exp(1j * (kmax*((gammaf*Xc)**2+(gammaf*Yc)**2)/(4*d*zp*magL)))
+        
+        E1m = np.divide(E1i,alphaf)
+        E2i = self.fts(E1m)
+        
+        kernelf = np.exp(-1j * kmax * (X**2 + Y**2)/(4*d*zp))
+        
+        E2m = np.multiply(E2i,kernelf)
+        E3i = self.fts(E2m)
+        
+
+        r2 = (2*np.pi*FX)**2 + (2*np.pi*FY)**2
+        # complex_show(E3i)
+        sp = np.sqrt(k_wvl**2 - r2)
+        avort = c*kmax  + d * (r2)/kmax
+        
+        h = (sp - avort)
+        # plt.figure()
+        # plt.plot(sp[:,int(M/2)])
+        # plt.plot(avort[:,int(M/2)])
+        # plt.plot(h[:,int(M/2)])
+        # plt.show()
+        E_forwrd = self.ifts(E3i * np.exp(1j*zp*h))
+        
+        return E_forwrd
+
+    def convergentSAASM_full_backup(self, z, field, wavelength, L, w_c):
+            zp = L-z
+            Magn = L/z
+            k_wvl = 2*np.pi/wavelength
+            N,M = np.shape(field)
+            pad = int(M/2)
+            E1i = self.ifts(np.pad(self.fts(field),((pad,pad),(pad,pad))))
+            N,M = np.shape(E1i)
+            xc = np.linspace(-w_c/2,w_c/2,M)
+            yc = np.linspace(-w_c/2,w_c/2,N)
+            fxc = np.fft.fftshift(np.fft.fftfreq(M,w_c/M))
+            fyc = np.fft.fftshift(np.fft.fftfreq(N,w_c/N))
+            Xc,Yc = np.meshgrid(xc,yc,indexing='xy')
+            Xo = Xc/Magn
+            Yo = Yc/Magn
+            FXC,FYC = np.meshgrid(fxc,fyc,indexing='xy')
+            FXo,FYo = fxc = np.meshgrid(np.fft.fftshift(np.fft.fftfreq(M,w_c/(Magn*M))), np.fft.fftshift(np.fft.fftfreq(N,w_c/(Magn*N))))
+            kmax = np.amax(2 * np.pi * np.sqrt(FXC**2 + FYC**2))
+            k_int = k_wvl/kmax
+            c = (2/3 *k_int)+(2/3 * np.sqrt(k_int-0.5))+(1/3 * np.sqrt(k_int-1))
+            d = 1/3 * np.sqrt(k_int-1) - k_wvl/kmax
+            # gammaf = -kmax/(2*d*L)
+            gammaf = 1
+            alphaf = np.exp(-1j*c*kmax*L) * kmax /(2j*d*L) * np.exp(1j * (kmax*((gammaf*Xc)**2+(gammaf*Yc)**2)/(4*d*L)))
+            
+            E1m = gammaf**2 * np.divide(E1i,alphaf)
+            E2i = self.fts(E1m)
+            
+            psMagn = w_c*k_wvl/(np.sqrt(2) * np.pi * Magn*M) -0.1
+            x = np.linspace(-w_c/2,w_c/2,M)/(psMagn*Magn)
+            y = np.linspace(-w_c/2,w_c/2,N)/(psMagn*Magn)
+            X, Y = np.meshgrid(x,y,indexing='xy')
+            FX, FY = np.meshgrid(np.fft.fftshift(np.fft.fftfreq(M,w_c/(psMagn*Magn*M))), np.fft.fftshift(np.fft.fftfreq(N,w_c/(psMagn*Magn*N))))
+
+            #_______________________________________
+            X = Xo
+            Y = Yo
+            FX = FXo
+            FY = FYo
+            #_____________________________
+            
+
+            kernelf = np.exp(-1j * kmax * (X**2 + Y**2)/(4*d*L))
+            E2m = np.multiply(E2i,kernelf)
+            E3i = self.fts(E2m)
+            
+            r2 = (2*np.pi*FX)**2 + (2*np.pi*FY)**2
+            # complex_show(E3i)
+            sp = np.sqrt(k_wvl**2 - r2)
+            avort = c*kmax  + d * (r2)/kmax
+            h = sp - avort
+
+            
+            
+
+
+
+            # kz = 0
+            
+            exp_h = np.exp(1j*(L+zp)*h)
+            E3m = E3i * exp_h
+            E4i = self.ifts(E3m)
+            
+            
+
+            # Ef = self.ifts(self.fts(self.fts(np.divide(El,alphaf))*kernelf)*hf)
+            # Ef = Ef[pad+1:2*pad,pad+1:2*pad]
+            
+            kerneld = np.exp(-1j*kmax*(X**2+Y**2)/(4*d*zp))
+            E4m = E4i*kerneld
+            E4o = self.fts(E4m)
+
+            alphad = -np.exp(1j*c*kmax*zp)*kmax/(2j*d*zp) * np.exp(-1j*kmax*(Xo**2 + Yo**2)/(4*d*zp))
+            Eo = alphad * E4o
+            # Eo = alphad * self.fts(self.ifts(self.fts(self.fts(np.divide(E1i,alphaf))*kernelf)*hf*hd)*kerneld)
+            complex_show(Eo)
+            return Eo
+
+    def kreuzer_reconstruct(self, holo, ref, z, L, x, lamvda):
+        # Definition of geometrical parameters, definition of contrast hologram
+        holoContrast = holo - ref
+        [fi, co] = holo.shape
+        # dx: real pixel size
+        dx = x / fi
+        # deltaX: pixel size at reconstruction plane
+        deltaX = z * dx / L
+        # Cosenus filter creation
+        FC = self.filtcosenoF(100, fi,0)
+        # Reconstruct
+        K = self.kreuzer3F(z, holoContrast, lamvda, dx, deltaX, L,FC)
+        return K
+
+    def kreuzer3F(self, z_prop, field, wavelength, pixel_pitch_in, pixel_pitch_out, L,FC):
         z = L-z_prop
-        dx = pixel_pitch_in[0]
-        dX = pixel_pitch_out[0]
+        dx = pixel_pitch_in
+        dX = pixel_pitch_out
         # Squared pixels
         deltaY = dX
         # Matrix size
         [row, a] = field.shape
-        FC = self.filtcosenoF(100, row,0)
         # Parameters
         k = 2 * np.pi / wavelength
         W = dx * row
@@ -734,37 +837,72 @@ class metrics:
         sigma = sigma * np.sqrt(0.5 * np.pi) / (6 * (W - 2) * (H - 2))
         return sigma
     
+    def find_peaks(self, signal, threshold):
+        peaks = []
+        for i in range(1, len(signal)-1):
+            if signal[i] < signal[i-1] and signal[i] < signal[i+1] and signal[i] < threshold:
+                peaks.append(i)
+        return peaks
+
     def measure_resolution(self,I):
         I_array = np.copy(I)
         I = np.uint8(I*255)
-        temp = np.uint8(open_image(r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\kernelUsaf.png")*255)
+        M,N = np.shape(I)
+        temp = np.uint8(open_image(r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\template.png")*255)
+        M_temp,N_temp = np.shape(temp)
         grayImage = cv2.cvtColor(I, cv2.COLOR_GRAY2BGR)
         template = cv2.cvtColor(temp, cv2.COLOR_GRAY2BGR)
         image_copy = grayImage.copy()
         result = cv2.matchTemplate(grayImage, template, cv2.TM_CCOEFF_NORMED)
 
         # Define a threshold to filter out weak matches
-        threshold = 0.5
+        threshold = 0.8
         loc = np.where(result >= threshold)
+        init = 0
         for pt in zip(*loc[::-1]):
+            if init == 0:
+                init = 1
+                pt_0 = pt
             cv2.rectangle(image_copy, pt, (pt[0] + template.shape[1], pt[1] + template.shape[0]), (0, 255, 0), 2)
+        measurements = 5
+        pt_0 = (459,391)
+        contrast_mat = np.zeros((measurements,6))
+        profile_idx_0 = pt_0[0]+34
+        print(pt_0)
+        for i in range(measurements):
+            
+            profile_idx = profile_idx_0+i
+            profile = (I_array[pt_0[1]:pt_0[1]+M_temp,profile_idx])
 
-        profile_idx = pt[0]+31
-        profile = I_array[pt[1]:pt[1]+80,profile_idx]
-        fig = px.line(profile)
-        # fig.show()
+            G1 = profile[0:30]
+            G2 = profile[42:66]
+            G3 = profile[77:95]
+            G4 = profile[113:127]
+            G5 = profile[142:151]
+            G6 = profile[165:169]
+            groups = [G1,G2,G3,G4,G5,G6]
+            j = 0
+            for group in groups:
+                contrast = (np.amax(group) - np.amin(group))/(np.amin(group) + np.amax(group))
+                contrast_mat[i,j] = contrast
+                j = j + 1
+        
+        # freqpx = [1/2, 1/4, 1/6, 1/8, 1/10, 1/12]
+        freqpx = [1/12, 1/10, 1/8, 1/6, 1/4, 1/2]
+        contrast = np.mean(contrast_mat,axis=0)
+        std = np.std(contrast_mat,axis=0)
 
-
-        # _, thr = cv2.threshold(grayImage,8,255, cv2.THRESH_BINARY_INV)
-        # thr = cv2.cvtColor(thr, cv2.COLOR_BGR2GRAY)
-        # contours, hierarchy = cv2.findContours(image=thr, mode=cv2.RETR_TREE,method=cv2.CHAIN_APPROX_SIMPLE)
-        # cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(255, 0, 0), thickness=2, lineType=cv2.LINE_AA)
-        cv2.imshow('None approximation', image_copy)
-        cv2.waitKey(0)
-
-        return 0
+        fig = px.line(x=freqpx,y=contrast)
+        fig.show(0)
+        resized_image = cv2.resize(image_copy, (512,512), interpolation=cv2.INTER_AREA)
+        
+        
+        cv2.imwrite(r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\resol_template.jpg",image_copy)
+        
+        # contrast_mat es, en filas instancias, columnas, grupos de los USAF 
+        return contrast, std
     
-    def measure_distortion(self,I,s_w):
+    def measure_distortion(self,I):
         kernel = np.array([[0.88,0.26,0.04,0.26,0.88],
                            [0.26,0.0, 0.0, 0.0,0.27],
                            [0.05,0.0, 0.0, 0.0,0.05],
@@ -772,15 +910,18 @@ class metrics:
                            [0.88,0.26,0.043,0.26,0.88]])
         I = np.uint8(I*255)
         grayImage = cv2.cvtColor(I, cv2.COLOR_GRAY2BGR)
-        image_copy = grayImage.copy()
+        Mar,N = np.shape(I)
         grayImage = cv2.filter2D(grayImage, -1, kernel)
-        
-        _, thr = cv2.threshold(grayImage,150,255, cv2.THRESH_BINARY_INV)
+        # image_copy = grayImage.copy()
+        _, thr = cv2.threshold(grayImage,200,255, cv2.THRESH_BINARY_INV)
+        image_copy = thr.copy()
         thr = cv2.cvtColor(thr, cv2.COLOR_BGR2GRAY)
         contours, hierarchy = cv2.findContours(image=thr, mode=cv2.RETR_TREE,method=cv2.CHAIN_APPROX_SIMPLE)
         cntmax = 0
         centroids = []
         rmax = 0
+        cXm = cYm = 0
+        r2 = 0
         for cnt in contours:
             # Calculate moments
             M = cv2.moments(cnt)
@@ -793,26 +934,37 @@ class metrics:
                 cX, cY = 0, 0
             
             r = cX**2 + cY**2
-            if r>rmax:
-                cntmax = cnt
-                rmax = r
-                cXm = cX
-                cYm = cY
+            if r>r2:
+                if r>rmax:
+                    cntmax = cnt
+                    r2 = rmax
+                    rmax = r
+                    c2X = cXm
+                    cXm = cX
+                    c2Y = cYm
+                    cYm = cY
+                else:
+                    c2X = cX
+                    c2Y = cY
+                    r2 = r
+                
             centroids.append((cX, cY))
-        center = (cXm,cYm)
-        ideal_center = (903,903)
-        distortion = np.sqrt((center[0]-ideal_center[0])**2 + (center[1]-ideal_center[1])**2)
-
+        center_max = (cXm,cYm)
+        center_2 = (c2X,c2Y)
+        ideal_relation = 0.3273657289002558
+        d2 = np.sqrt((center_max[0] - center_2[0])**2 + (center_max[1] - center_2[1])**2)
+        d1 = np.sqrt((center_max[0] - Mar/2)**2 + (center_max[1] - N/2)**2)
+        distortion = np.abs((ideal_relation - (d2/d1))/ideal_relation)
         cv2.drawContours(image=image_copy, contours=cntmax, contourIdx=-1, color=(255, 0, 0), thickness=2, lineType=cv2.LINE_AA)
-        cv2.circle(image_copy, center, radius=5, color=(0, 0, 255), thickness=-1)
-        cv2.circle(image_copy, ideal_center, radius=5, color=(0, 255, 0), thickness=-1)         
+        cv2.circle(image_copy, center_max, radius=5, color=(0, 0, 255), thickness=-1)
+        cv2.circle(image_copy, (c2X,c2Y), radius=5, color=(0, 255, 0), thickness=-1)         
         # see the results
         resized_image = cv2.resize(image_copy, (512,512), interpolation=cv2.INTER_AREA)
-        cv2.imshow('None approximation', resized_image)
-        cv2.waitKey(1)
-        cv2.imwrite(r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\distort.jpg",image_copy)
+        # cv2.imshow('None approximation', resized_image)
+        # cv2.waitKey(0)
+        # cv2.imwrite(r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\distort.jpg",image_copy)
 
-        return distortion,center
+        return distortion*100
     
     def measure_phase_sensitivity(self,I):
         return 0

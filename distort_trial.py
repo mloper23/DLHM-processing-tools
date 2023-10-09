@@ -10,7 +10,7 @@ from PIL import Image
 
 holo = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\PLUGIN\Holo_gridshow_633_3500_5_1_1.bmp"
 wvl = 633e-9                       # wavelength [m]
-rec_dis = 2.16e-3                   # Reconstruction distance [m]
+rec_dis = 2.35e-3                   # Reconstruction distance [m]
 So_sc = 5e-3                       # L parameter in the microscope setup [m]
 in_width = 1e-3                    # Width of the input plane[m]
 in_height = in_width               # Height of the input plane [m]
@@ -40,22 +40,24 @@ focus_params = [holo, wvl, input_pitch, output_pitch]
 focus = LHM.focus('amp')
 reconstructor = LHM.reconstruct()
 metrics = LHM.metrics()
-focus.manual_focus('convergentSAASM',focus_params,1.1e-3,1.3e-3,11)
+# focus.manual_focus('convergentSAASM',focus_params,2e-3,2.5e-3,11)
 
 
 # rec = reconstructor.kreuzer3F(rec_dis,holo,wvl,input_pitch,output_pitch,So_sc)
-rec = reconstructor.convergentSAASM_pad(rec_dis,holo,wvl,input_pitch,output_pitch)
-sample_width = in_width / (So_sc/(So_sc - rec_dis))
+rec = reconstructor.convergentSAASM(rec_dis,holo,wvl,input_pitch,output_pitch)
+
 image = np.abs(rec)**2
 image = image - np.amin(image)
 image = image/np.amax(image)
 
+# image = LHM.open_image(r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\Grid_show.png")
+
 LHM.complex_show(rec)
 # print(sample_width)
-distortion,centroid = metrics.measure_distortion(image,sample_width)
+distortion = metrics.measure_distortion(image)
 
 print('Distortion: ',distortion)
-print('Reconstructed centroid',centroid)
+
 
 
 

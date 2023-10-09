@@ -17,7 +17,7 @@ reconstruct = LHM.reconstruct()
 
 
 
-file_paths = [r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\USAF-fin.png",
+file_paths = [r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\USAF-sampled.png",
               r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\Grid_show.png",
               r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\Fringes.png"]
 
@@ -50,7 +50,7 @@ for i in range(df.shape[0]):
     in_width = out_width / Magn          # Width of the output plane [m]
     in_height = out_height / Magn        # Height of the output plane [m]
     index = df['Archivo'][i]
-    sample = amplitude * np.exp(1j * k * phase)
+    sample = amplitude * np.exp(1j * 8 * phase)
     holo, ref = reconstruct.realisticDLHM(sample,wvl,So_sc,So_Sa,out_width,1e-6, 2, 256)
     name_holo = output_names[index] + NA_str+'.bmp'
     name_ref  = output_names[index] + NA_str + '_ref.bmp'

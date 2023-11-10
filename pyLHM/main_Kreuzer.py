@@ -4,7 +4,7 @@ import plotly.express as px
 rec = reconstruct()
 
 path = '/Users/mjloperaa/Library/CloudStorage/OneDrive-UniversidadEAFIT/EAFIT/DLHM-data/05242023/usaf6.tif'
-img = np.array(cv.imread(path))[:, 200:1224, 1].astype('float')
+img = np.array(cv2.imread(path))[:, 200:1224, 1].astype('float')
 
 N, M = img.shape
 

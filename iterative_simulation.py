@@ -33,7 +33,7 @@ output_names = [r'\usaf_',
 for i in range(df.shape[0]):
     if df['Tipo Muestra'][i] == 0:
         amplitude = LHM.open_image(file_paths[df['Archivo'][i]])
-        phase = np.ones_like(amplitude)
+        phase = np.zeros_like(amplitude)
     else:
         phase = LHM.open_image(file_paths[df['Archivo'][i]])
         amplitude = np.ones_like(phase)
@@ -42,15 +42,15 @@ for i in range(df.shape[0]):
     NA_str = NA.replace('.','')
     wvl = df['λ [nm]'][i] * 10**(-9)
     k = 2*np.pi/wvl
-    So_sc = df['L [mm]'][i] * 10**(-6)
-    So_Sa = df['Z [mm]'][i] * 10**(-6)
-    out_width = df['W [mm]'][i] * 10**(-6)
+    So_sc = df['L [mm]'][i] * 10**(-3)
+    So_Sa = df['Z [mm]'][i] * 10**(-3)
+    out_width = df['W [mm]'][i] * 10**(-3)
     out_height = out_width
     Magn = So_sc/So_Sa
     in_width = out_width / Magn          # Width of the output plane [m]
     in_height = out_height / Magn        # Height of the output plane [m]
     index = df['Archivo'][i]
-    sample = amplitude * np.exp(1j * 8 * phase)
+    sample = amplitude * np.exp(1j * phase)
     holo, ref = reconstruct.realisticDLHM(sample,wvl,So_sc,So_Sa,out_width,1e-6, 2, 256)
     name_holo = output_names[index] + NA_str+'.bmp'
     name_ref  = output_names[index] + NA_str + '_ref.bmp'

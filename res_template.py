@@ -18,6 +18,14 @@ def get_files_in_folder(folder_path):
             files.append(os.path.join(root, file_name))
     return files
 
+def hex_rgba(hex, transparency):
+    col_hex = hex.lstrip('#')
+    col_rgb = list(int(col_hex[i:i+2], 16) for i in (0, 2, 4))
+    col_rgb.extend([transparency])
+    areacol = tuple(col_rgb)
+    return areacol
+
+
 metrics = LHM.metrics()
 sample_path = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\USAF-sampled.png"
 sample = LHM.open_image(sample_path)
@@ -27,42 +35,41 @@ x = [i for i in range(len(profile_sample))]
 
 
 kreuzer_in = True
-NA = r'\01'
+NA = r'\08'
+index = 3 # Only change this for NA>=0.6
 folder = r'F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Recs\USAF'+ NA
 files = get_files_in_folder(folder)
 
-# props_names = [r'realistic',r'AS',r'kreuzer',r'SAASM']
-# profiles = [493,493,483]
-
-props_names = [r'AS',r'kreuzer',r'realistic']
-if kreuzer_in == True:
-    profiles = [493,483,493]
-    profile_lists = [0,0,0,profile_sample]
-    mtfs = [0,0,0]
-    groups = [[(393,420),(433,455),(470,487),(504,518),(533,542),(557,561)],
-          [(330,374),(390,427),(445,474),(500,521),(544,558),(580,585)],
-          [(393,420),(433,455),(470,487),(504,518),(533,542),(557,561)]]
-else:
-    profiles = [493,493]
-    profile_lists = [0,0,profile_sample]
-    mtfs = [0,0]
-    groups = [[(393,420),(433,455),(470,487),(504,518),(533,542),(557,561)],
-          [(393,420),(433,455),(470,487),(504,518),(533,542),(557,561)]]
+props_names = [r'AS',r'kreuzer',r'RS1']
+names = ['Angular Spectrum','Kreuzer','Rayleigh']
+profiles = [493,483,493]
 
 
-# groups = [[(393,420),(433,455),(470,487),(504,518),(533,542),(557,561)],
+
+
+kreuzer_groups = [[(373,409),(420,450),(460,483),(502,519),(534,547),(560,566)],
+                  [(340,382),(398,433),(448,477),(500,522),(542,557),(577,583)],
+                  [(335,378),(395,432),(448,475),(500,522),(542,557),(577,584)],
+                  [(331,375),(393,430),(445,475),(499,522),(543,559),(577,585)]]
+
+
+mtfs = [0,0,0]
+stdv = np.zeros((6,3))
+profile_lists = [0,0,0,profile_sample]
+groups = [[(391,420),(432,457),(467,487),(504,518),(533,542),(556,561)],
+          kreuzer_groups[index],
+          [(393,421),(432,457),(467,487),(504,518),(532,542),(555,561)]]
+
+# groups = [[(391,420),(432,457),(467,487),(504,518),(533,542),(556,561)],
 #           [(393,420),(433,455),(470,487),(504,518),(533,542),(557,561)],
-#           [(330,374),(390,427),(445,474),(500,521),(544,558),(580,585)]]
-
+#           [(393,421),(432,457),(467,487),(504,518),(532,542),(555,561)]]
 
 
 max_px = 0
 for file in files:
-    if 'SAASM' in file:
-        continue
     idx = files.index(file)
     I = LHM.open_image(file)
-    mtfs[idx],_,profile_lists[idx] = metrics.measure_resolution(I,profiles[idx],groups[idx])
+    mtfs[idx],stdv[:,idx],profile_lists[idx] = metrics.measure_resolution(I,profiles[idx],groups[idx])
     if len(profile_lists[idx])>max_px:
         max_px = len(profile_lists[idx])
 
@@ -75,64 +82,74 @@ for profile in profile_lists:
     profile_lists[ind] = inter(x_supreme)
     ind = ind+1
 
-if kreuzer_in == True:
-    df = pd.DataFrame({
-        'x':x_supreme,
-        'AS':profile_lists[0],
-        'kreuzer': profile_lists[1],
-        'realistic':profile_lists[2],
-        'sample':profile_lists[3]
-    })
-    fig = px.line(df, x='x', y=['AS', 'kreuzer', 'realistic','sample'], title='Profile comparisson')
-    fig.update_xaxes(title_text='Spatial Frequency [1/px]')
-    fig.update_yaxes(title_text='Contrast')
-    fig.update_layout(legend=dict(title='Reconstruction\nmethod'))
-    folder_name = r'F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\Profiles'+NA+'profile.html'
-    fig.write_html(folder_name)
 
-    x = [1/12, 1/10, 1/8, 1/6, 1/4, 1/2]
-    df = pd.DataFrame({
-        'x':x,
-        'AS':mtfs[0],
-        'kreuzer': mtfs[1],
-        'realistic':mtfs[2],
-    })
+# df = pd.DataFrame({
+#     'x':x_supreme,
+#     'AS':profile_lists[0],
+#     'kreuzer': profile_lists[1],
+#     'RS1':profile_lists[2],
+#     'sample':profile_lists[3]
+# })
+# fig = px.line(df, x='x', y=['AS', 'kreuzer', 'realistic','sample'], title='Profile comparisson')
+# fig.update_xaxes(title_text='Spatial Frequency [1/px]')
+# fig.update_yaxes(title_text='Contrast')
+# fig.update_layout(legend=dict(title='Reconstruction\nmethod'))
+# folder_name = r'F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\Profiles'+NA+'profile.html'
+# fig.write_html(folder_name)
 
-    fig = px.line(df, x='x', y=['AS', 'kreuzer', 'realistic'], title='Frequency Response')
-    fig.update_layout(legend=dict(title='Reconstruction\nmethod'))
-    fig.update_xaxes(title_text='Spatial Frequency [1/px]')
-    fig.update_yaxes(title_text='Contrast')
-    fig.update_traces(line=dict(color='#6C0E5D'), selector=dict(mode='lines', name='AS'))
-    fig.update_traces(line=dict(color='#E66C51'), selector=dict(mode='lines', name='kreuzer'))
-    fig.update_traces(line=dict(color='#0061A8'), selector=dict(mode='lines', name='realistic'))
-    folder_name = r'F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\MTF'+NA+'profile.html'
-    fig.write_html(folder_name)
-else:
-    df = pd.DataFrame({
-        'x':x_supreme,
-        'AS':profile_lists[0],
-        'realistic':profile_lists[1],
-        'sample':profile_lists[2]
-    })
-    fig = px.line(df, x='x', y=['AS','realistic','sample'], title='Profile comparisson')
-    fig.update_layout(legend=dict(title='Reconstruction method'))
-    fig.update_xaxes(title_text='Spatial Frequency [1/px]')
-    fig.update_yaxes(title_text='Contrast')
-    folder_name = r'F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\Profiles'+NA+'profile.html'
-    fig.write_html(folder_name)
+x = [1/12, 1/10, 1/8, 1/6, 1/4, 1/2]
+x = [i/7.32e-7 for i in x]
+df = pd.DataFrame({
+    'x':x,
+    'AS':mtfs[0],
+    'kreuzer': mtfs[1],
+    'RS1':mtfs[2],
+})
 
-    x = [1/12, 1/10, 1/8, 1/6, 1/4, 1/2]
-    df = pd.DataFrame({
-        'x':x,
-        'AS':mtfs[0],
-        'realistic':mtfs[1],
-    })
+fig = go.Figure()
 
-    fig = px.line(df, x='x', y=['AS', 'realistic'], title='Frequency Response')
-    fig.update_layout(legend=dict(title='Reconstruction\nmethod'))
-    fig.update_xaxes(title_text='Spatial Frequency [1/px]')
-    fig.update_yaxes(title_text='Contrast')
-    folder_name = r'F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\MTF'+NA+'profile.html'
-    fig.write_html(folder_name)
+colors = ['#6C0E5D',
+          '#E66C51',
+          '#0061A8']
+
+rgba = ['rgba'+str(hex_rgba(c, transparency=0.2)) for c in colors]
+
+for i, col in enumerate(df):
+    if col=='x':
+        continue
+    x = list(df['x'])
+    y1 = df[col]
+    y1_upper = list(y1+stdv[:,i-1])
+    y1_lower = list(y1-stdv[:,i-1])
+    y1_lower = y1_lower[::-1]
+    fig.add_traces(go.Scatter(x=x,
+                              y=y1,
+                              line=dict(color=colors[i-1], width=2.5),
+                              mode='lines',
+                              name=names[i-1])
+                                )
+    
+    fig.add_traces(go.Scatter(x=x+x[::-1],
+                                y=y1_upper+y1_lower,
+                                fill='tozerox',
+                                fillcolor=rgba[i-1],
+                                line=dict(color=colors[i-1],width=0),
+                                marker=dict(opacity=0),
+                                showlegend=True,
+                                name=names[i-1]+' std'))
+    
+    
+    
+
+fig.update_layout(legend=dict(title='Reconstruction\nmethod'),title='Frequency response')
+fig.update_xaxes(title_text='Spatial Frequency [1/m]',range=[x[0],x[5]])
+fig.update_yaxes(title_text='Contrast',range=[-0.01,1.01])
+# fig.update_traces(line=dict(color='#6C0E5D'), selector=dict(mode='lines', name='AS'))
+# fig.update_traces(line=dict(color='#E66C51'), selector=dict(mode='lines', name='kreuzer'))
+# fig.update_traces(line=dict(color='#0061A8'), selector=dict(mode='lines', name='realistic'))
+folder_name = r'F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\MTF'+NA+'profile.html'
+# fig.write_html('try.html')
+fig.write_html(folder_name)
+
 
 

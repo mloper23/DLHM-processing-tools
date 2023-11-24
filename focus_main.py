@@ -9,7 +9,7 @@ import imageio as io
 
 # Reconstruction parameters
 
-# holo = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos\Grid\grid_01.bmp"
+# holo = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos\Grid\grid_08.bmp"
 holo = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos\USAF\usaf_08.bmp"
 
 
@@ -18,7 +18,8 @@ k_wvl = 2 * np.pi/wvl
 # rec_dis = 3.444e-3                  # Reconstruction distance [m]
 So_sc = 1.46e-3                    # L parameter in the microscope setup [m]
 # z_micro = So_sc-rec_dis
-z_micro = 0.94e-3
+z_micro = 0.2528e-3
+c1 = 1
 in_width = 3e-3                    # Width of the input plane[m]
 in_height = in_width               # Height of the input plane [m]
 
@@ -44,16 +45,17 @@ M,N = np.shape(holo)
 input_pitch = in_width/M
 output_pitch = out_width/N
 outshape = (M,N)
-parameters = [z_micro, holo, wvl, So_sc, in_width, np.zeros_like(holo)]
+parameters = [z_micro*c1, holo, wvl, So_sc, in_width, np.zeros_like(holo)]
 
 focus_params =[[holo, wvl, input_pitch, So_sc],
                [holo, wvl, So_sc, in_width,np.zeros_like(holo)],
                [holo, wvl, So_sc, in_width]]
 
 
+idx = 1
 propagator = LHM.reconstruct()
-# solution = propagator.autocall('angularSpectrum',parameters)
-# solution = propagator.kreuzer_reconstruct(*parameters)
+# solution = propagator.autocall(propagators[idx],[z_micro]+focus_params[idx])
+solution = propagator.kreuzer_reconstruct(*parameters)
 # M,N = np.shape(solution)
 # x = (np.arange(M)-M/2)
 # X,Y = np.meshgrid(x*output_pitch,x*output_pitch)
@@ -65,15 +67,16 @@ propagator = LHM.reconstruct()
 
 # M,N = np.shape(solution)
 # im = LHM.complex_show(solution[int(M/4):int(3*M/4),int(N/4):int(3*N/4)],negative=False)
-# im = LHM.complex_show(solution,negative=False)
+im = LHM.complex_show(solution,negative=False)
 
 
 
 
-idx = 2
+
 focusing = LHM.focus('amp')
 # xar = focusing.manual_focus(propagators[idx],focus_params[idx],0.1*So_sc,So_sc,11)
-xar = focusing.manual_focus(propagators[idx],focus_params[idx],0.38e-3,0.39e-3,11)
+# xar = focusing.manual_focus(propagators[idx],focus_params[idx],0.81e-3,0.83e-3,11)
+# xar = focusing.manual_focus(propagators[idx],focus_params[idx],2*So_sc,3*So_sc,11)
 # gif = LHM.save_gif(xar)
 # focusing.manual_focus('convergentSAASM',focus_params,10e-3,20e-3,11)
 # fig = px.imshow(np.angle(solution),color_continuous_scale='gray')

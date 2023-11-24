@@ -41,13 +41,13 @@ class focus:
             if self.mode =='amplitude':
                 amp = np.abs(hz)**2
                 if np.shape(amp)[0]>1024:
-                    amp = cv2.resize(amp,(1024,1024))
+                    amp = cv2.resize(amp,(1023,1023))
                 img = amp[int(M/4):int(M/2 + (M/4)),int(N/4):int(N/2 + (N/4))]
                 # img = amp
             elif self.mode == 'phase':
                 phase = np.angle(hz)
                 if np.shape(phase)[0]>1024:
-                    phase = cv2.resize(amp,(1024,1024))
+                    phase = cv2.resize(amp,(1023,1023))
                 img = phase[int(M/4):int(M/2 + (M/4)),int(N/4):int(N/2 + (N/4))]
                 # img = phase
             print(i+1)
@@ -645,22 +645,37 @@ class reconstruct:
         # Definition of geometrical parameters, definition of contrast hologram
         c1 = 1
         c2 = 1
-        z = z/c2
-        L = L*c1
-
-
-        holoContrast = holo - ref
         [fi, co] = holo.shape
-        # pad = int(fi/4)
-        pad = 0 
+        holoContrast = holo - ref
+        NA = np.arctan(x/(2*L))
+        if NA>0.55:
+            r = 0.8
+            c1 = 1
+            c2 = 4
+            z = z*c2
+            # padi = int((2*fi - fi/r)/2) 
+            padi = int(fi/4)
+            holoContrast = resize(holoContrast,1/r)
+            # holoContrast = np.pad(holoContrast,(padi,padi))
+
+        
+        L = L*c1
+        x = x/c2
+        
+        
+        
+        
+
         # dx: real pixel size
         dx = x / fi
-        dx = dx*c2
+        
 
-        holoContrast = np.pad(holoContrast,((pad,pad),(pad,pad)))
         [fi, co] = holoContrast.shape
         # deltaX: pixel size at reconstruction plane
         deltaX = z * dx / L
+
+        # crit = (lamvda / fi) * (L/dx)
+        # print(deltaX<=crit)
         # Cosenus filter creation
         FC = self.filtcosenoF(100, fi,0)
         # Reconstruct
@@ -1145,6 +1160,16 @@ def find_local_minima(arr, percentage_threshold,maxi,neighbourhood):
 
     return peaks
 
+def resize(I,sr):
+    M,N = np.shape(I)
+    M = int(sr*M)
+    N = int(sr*N)
+    shape = (M,N)
+    I = np.uint8(I*255)
+    grayImage = cv2.cvtColor(I, cv2.COLOR_GRAY2BGR)
+    out = cv2.resize(grayImage, shape, interpolation=cv2.INTER_AREA)
+
+    return norm(np.asarray(out)[:,:,0])
 
 
 

@@ -28,7 +28,7 @@ def find_in(input_string, template):
 df = pd.read_excel(r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\focus_dist.xlsx")
 df.describe()
 
-df_keys = ['realistic z\nfocus [mm]', 'AS z \nfocus [mm]', 'kreuzer z\nfocus [mm]', 'SAASM z\nfocus [mm]']
+df_keys = ['AS z \nfocus [mm]', 'kreuzer z\nfocus [mm]','Rayleigh z focus [mm]']
 
 reconstruct = LHM.reconstruct()
 
@@ -36,8 +36,8 @@ gen_inp_path = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos"
 
 gen_out_path = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Recs"
 
-propagators = ['realistic_rec_DLHM','angularSpectrum','kreuzer_reconstruct','convergentSAASM']
-props_names = [r'realistic',r'AS',r'kreuzer',r'SAASM']
+propagators = ['angularSpectrum','kreuzer_reconstruct','rayleigh_convolutional']
+props_names = [r'AS',r'kreuzer',r'RS1']
 
 file_paths = [r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\USAF-sampled.png",
               r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\Grid_show.png",
@@ -55,7 +55,7 @@ NAS = [round(n,1) for n in NAS]
 
 M = N = 1024
 wvl = 411e-9                       # wavelength [m]
-in_width = 1e-3                    # Width of the input plane[m]
+in_width = 3e-3                    # Width of the input plane[m]
 in_height = in_width               # Height of the input plane [m]
 input_pitch = in_width/M
 #------------------------------ Asumptions from the geometry----------------------------------
@@ -81,10 +81,9 @@ for sample in range(3):
             out_width = in_width/Magn          # Width of the output plane [m]
             out_height = in_height/Magn        # Height of the output plane [m]
             output_pitch = out_width/N
-            focus_params =[[z_micro, holo, wvl, So_sc, in_width,1e-6,2,256],
-               [z_micro, holo, wvl, input_pitch, So_sc],
+            focus_params =[[z_micro, holo, wvl, input_pitch, So_sc],
                [z_micro, holo, wvl, So_sc, in_width,np.zeros_like(holo)],
-               [z_micro, holo, wvl, (input_pitch,input_pitch),(input_pitch,input_pitch),So_sc]]
+               [z_micro, holo, wvl, So_sc, in_width]]
 
             start_rec = time.time()
             reconstruction = reconstruct.autocall(prop,focus_params[idx])
@@ -98,15 +97,15 @@ for sample in range(3):
             path_fin = outfolder+filename
             if sample == 2:
                 # image = reconstruct.norm_bits(np.angle(reconstruction),256)
-                point_src = np.exp(-i * k_wvl)
-                image = -np.angle(reconstruction)[255:800,255:800]
+                # point_src = np.exp(-i * k_wvl)
+                image = -np.angle(reconstruction)
                 
 
             else:
                 # image = reconstruct.norm_bits(np.abs(reconstruction)**2,256)
                 image = np.abs(reconstruction) ** 2
 
-            if  prop == 'kreuzer_reconstruct':
+            if  prop == 'kreuzer_reconstruct' or prop == 'rayleigh_convolutional':
                 image = cv2.resize(image, (1024,1024), interpolation=cv2.INTER_AREA)
             LHM.save_image(image,path_fin)
 

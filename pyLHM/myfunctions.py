@@ -649,14 +649,14 @@ class reconstruct:
         holoContrast = holo - ref
         NA = np.arctan(x/(2*L))
         if NA>0.55:
-            r = 0.8
+            r = 0.5
             c1 = 1
             c2 = 4
             z = z*c2
             # padi = int((2*fi - fi/r)/2) 
-            padi = int(fi/4)
+            padi = int(fi * (0.8-r))
             holoContrast = resize(holoContrast,1/r)
-            # holoContrast = np.pad(holoContrast,(padi,padi))
+            holoContrast = np.pad(holoContrast,(padi,padi))
 
         
         L = L*c1
@@ -1104,15 +1104,21 @@ def complex_show(U,negative=False):
     amplitude = amplitude*255/np.amax(amplitude)
     if negative==True:
         amplitude = 255-amplitude
+
+    if np.shape(U)[0]>1024:
+        amplitude = cv2.resize(amplitude,(1024,1024))
     amplitude = skm.color.gray2rgb(amplitude)
     amplitude = go.Image(z=amplitude)
     
     phase = np.angle(U)
     phase = phase-np.amin(phase)
     phase = phase*255/np.amax(phase)
+    if np.shape(U)[0]>1024:
+        phase = cv2.resize(phase,(1024,1024))
     phase = skm.color.gray2rgb(phase)
     phase = go.Image(z=phase)
     fig = make_subplots(rows=1,cols=2,subplot_titles=("Amplitude","Phase"))
+    
     fig.add_trace(
         amplitude,row=1,col=1
     )

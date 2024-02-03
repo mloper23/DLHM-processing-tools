@@ -53,7 +53,7 @@ stop = time.time()
 print('Runtime = ',stop-start,' s')
 
 intensity = np.abs(solution)**2
-im = LHM.save_image(intensity,'raleygh_633_500_5_1_1.bmp')
+# im = LHM.save_image(intensity,'raleygh_633_500_5_1_1.bmp')
 
 M,N = np.shape(solution)
 # im = LHM.complex_show(solution[int(M/4):int(3*M/4),int(N/4):int(3*N/4)],negative=False)

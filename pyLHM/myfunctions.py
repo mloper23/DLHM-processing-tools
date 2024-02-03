@@ -877,17 +877,7 @@ class reconstruct:
 
     def fts(self, A):
         return np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(A)))
-
-    def compensate_spheric(self,field,z1,z2,it):
-        M,N = np.shape(field)
-        zs = np.linspace(z1,z2,it)
-        for z in zs:
-            comp_ref = self.point_src()
-            comp_field = field * comp_ref
-            
-        I_comp = 0
-        return I_comp
-
+    
     def point_src(self, M, z, x0, y0, lamb, dx):
         N = M
         dy = dx
@@ -934,7 +924,7 @@ class metrics:
         I_array = np.copy(I)
         I = np.uint8(I*255)
         M,N = np.shape(I)
-        temp = np.uint8(open_image(r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\template.png")*255)
+        temp = np.uint8(open_image(r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\template.png")*255)
         M_temp,N_temp = np.shape(temp)
         grayImage = cv2.cvtColor(I, cv2.COLOR_GRAY2BGR)
         template = cv2.cvtColor(temp, cv2.COLOR_GRAY2BGR)
@@ -1073,15 +1063,13 @@ class metrics:
 
         return distortion*100,center_max
     
-    def measure_phase_sensitivity(self,I,sample):
+    def measure_phase_sensitivity(self,I):
         diagonal = np.diag(I)
-        if sample == True:
-            prof = np.flip(diagonal) [224:769]
-        else:
-            prof = np.flip(diagonal)
-        min = np.amin(prof)
-        center_prof = prof - min
-        vals = center_prof[center_prof<-0.15]
+        prof = np.flip(diagonal)[110:914]
+        mean = np.mean(prof[0:140])
+        center_prof = prof - mean
+        
+
         # sens = vals[0]
         return center_prof
     

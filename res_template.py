@@ -27,17 +27,19 @@ def hex_rgba(hex, transparency):
 
 
 metrics = LHM.metrics()
-sample_path = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\USAF-sampled.png"
+sample_path = r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\USAF-sampled.png"
 sample = LHM.open_image(sample_path)
 profile_sample = sample[393:561,494]
 x = [i for i in range(len(profile_sample))]
 
 
-
-kreuzer_in = True
-NA = r'\08'
-index = 3 # Only change this for NA>=0.6
-folder = r'F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Recs\USAF'+ NA
+showlegend=False
+kreuzer_in = False
+NAS = '0.8'
+NA = r'\ '+NAS.replace('.','')
+NA = NA.replace(' ','')
+index = 0 # Only change this (on increments of 1) for NA>=0.6 if kreuzer is in the graph
+folder = r'C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Recs\USAF'+ NA
 files = get_files_in_folder(folder)
 
 props_names = [r'AS',r'kreuzer',r'RS1']
@@ -98,7 +100,7 @@ for profile in profile_lists:
 # fig.write_html(folder_name)
 
 x = [1/12, 1/10, 1/8, 1/6, 1/4, 1/2]
-x = [i/7.32e-7 for i in x]
+x = [i/(7.32e-7 * 10**6) for i in x]
 df = pd.DataFrame({
     'x':x,
     'AS':mtfs[0],
@@ -108,14 +110,16 @@ df = pd.DataFrame({
 
 fig = go.Figure()
 
-colors = ['#6C0E5D',
-          '#E66C51',
-          '#0061A8']
+color_palette =['#CEE719',
+                '#4D94AD',
+                '#E69FFF']
 
-rgba = ['rgba'+str(hex_rgba(c, transparency=0.2)) for c in colors]
+rgba = ['rgba'+str(hex_rgba(c, transparency=0.3)) for c in color_palette]
 
 for i, col in enumerate(df):
     if col=='x':
+        continue
+    if kreuzer_in==False and col=='kreuzer':
         continue
     x = list(df['x'])
     y1 = df[col]
@@ -124,7 +128,7 @@ for i, col in enumerate(df):
     y1_lower = y1_lower[::-1]
     fig.add_traces(go.Scatter(x=x,
                               y=y1,
-                              line=dict(color=colors[i-1], width=2.5),
+                              line=dict(color=color_palette[i-1], width=2.5),
                               mode='lines',
                               name=names[i-1])
                                 )
@@ -133,22 +137,30 @@ for i, col in enumerate(df):
                                 y=y1_upper+y1_lower,
                                 fill='tozerox',
                                 fillcolor=rgba[i-1],
-                                line=dict(color=colors[i-1],width=0),
+                                line=dict(color=color_palette[i-1],width=0),
                                 marker=dict(opacity=0),
                                 showlegend=True,
                                 name=names[i-1]+' std'))
     
     
     
+fig.update_xaxes(title_text= 'Spatial Frequency [1/\u03bcm]',range=[x[0],x[5]],linecolor='black',gridcolor='lightgrey',mirror=True)
+fig.update_yaxes(title_text='Contrast',range=[-0.01,1.01],linecolor='black',gridcolor='lightgrey', mirror=True)
+fig.update_layout(legend=dict(title='Reconstruction\nmethod'), showlegend=showlegend,plot_bgcolor='white',title_x=0.5)
+fig.update_layout(
+                title=dict(text='Frequency responses at NA '+NAS, font=dict(size=40), yref='paper'),
+                font_family='Arial',
+                font_color="black",
+                title_font_family="Arial",
+                title_font_color="black",
+                )                                 
+fig.update_layout(
+font=dict(
+    family="Arial",
+    size=30,  # Set the font size here
+    color="black"))
 
-fig.update_layout(legend=dict(title='Reconstruction\nmethod'),title='Frequency response')
-fig.update_xaxes(title_text='Spatial Frequency [1/m]',range=[x[0],x[5]])
-fig.update_yaxes(title_text='Contrast',range=[-0.01,1.01])
-# fig.update_traces(line=dict(color='#6C0E5D'), selector=dict(mode='lines', name='AS'))
-# fig.update_traces(line=dict(color='#E66C51'), selector=dict(mode='lines', name='kreuzer'))
-# fig.update_traces(line=dict(color='#0061A8'), selector=dict(mode='lines', name='realistic'))
-folder_name = r'F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\MTF'+NA+'profile.html'
-# fig.write_html('try.html')
+folder_name = r'C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\MTF'+NA+'profile.html'
 fig.write_html(folder_name)
 
 

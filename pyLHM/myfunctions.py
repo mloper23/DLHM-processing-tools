@@ -118,8 +118,14 @@ class reconstruct:
             holo = holo + Ui
         
         holo = np.abs(holo) ** 2
-        camMat = np.array([[N, 0, N/2], [0, M, M/2], [0, 0, 1]])
-        dist = np.array([-NA*0.1, 0, 0, 0])
+
+        # Finding the maximum distortion
+        Max_D = np.abs((L + np.abs(np.sqrt(w_c ** 2 / 2 + L ** 2) - L)) / z - L / z)
+        print(Max_D)
+
+        # Distort the hologram
+        camMat = np.array([[N, 0, N / 2], [0, M, M / 2], [0, 0, 1]])
+        dist = np.array([-Max_D, 0, 0, 0])
         holo = cv.undistort(holo, camMat, dist)
 
         holo = holo * (1 - r/r.max())

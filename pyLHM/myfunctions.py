@@ -16,9 +16,8 @@ from plotly.subplots import make_subplots
 import pandas as pd
 import skimage as skm
 import xarray as xr
-import cv2
-
-
+import cv2 as cv2
+import matplotlib.pyplot as plt
 
 class focus:
     def __init__(self,mode=None ):
@@ -96,11 +95,12 @@ class reconstruct:
         if callable(getattr(self, propagator, None)):
             # print(f"'{propagator}' is a valid propagator!")
             propagator = getattr(self,propagator,None)
-            try:
-                sol = propagator(*self.param)
-                return sol
-            except:
-                raise ValueError(f"The parameters '{parameters}' does not correspond to the chosen propagator")
+            sol = propagator(*self.param)
+            return sol
+            # try:
+                
+            # except:
+            #     raise ValueError(f"The parameters '{parameters}' do not correspond to '{propagator}' ")
 
         else:
             raise ValueError(f"'{propagator}'? That's not a valid propagator method.")
@@ -191,9 +191,11 @@ class reconstruct:
             ps = ps + ps_
             holo = holo + Ui
         
+        
         holo = np.abs(holo) ** 2
         camMat = np.array([[N, 0, N/2], [0, M, M/2], [0, 0, 1]])
-        dist = np.array([-NA*0.1, 0, 0, 0])
+        max_dist = np.abs((L + np.abs(np.sqrt(w_c ** 2 / 2 + L ** 2) - L)) / z - L / z)
+        dist = np.array([-max_dist, 0, 0, 0])
         holo = cv2.undistort(holo, camMat, dist)
 
         holo = holo * (1 - r/r.max())
@@ -656,7 +658,7 @@ class reconstruct:
             # padi = int((2*fi - fi/r)/2) 
             padi = int(fi/4)
             holoContrast = resize(holoContrast,1/r)
-            # holoContrast = np.pad(holoContrast,(padi,padi))
+            holoContrast = np.pad(holoContrast,(padi,padi))
 
         
         L = L*c1
@@ -760,8 +762,8 @@ class reconstruct:
         X, Y = np.meshgrid(x - (N / 2), y - (M / 2), indexing='xy')
         # dfx = 1 / (pixel_pitch_in * M)
         # dfy = 1 / (pixel_pitch_in * N)
-        dfx = 1 / (pixel_pitch_out * M)
-        dfy = 1 / (pixel_pitch_out * N)
+        dfx = 1 / (pixel_pitch_in * M)
+        dfy = 1 / (pixel_pitch_in * N)
 
         field_spec = np.fft.fftshift(field)
         field_spec = np.fft.fft2(field_spec)
@@ -822,6 +824,13 @@ class reconstruct:
         # Assure there isn't null pixel positions
         iXcoord[iXcoord == 0] = 1
         iYcoord[iYcoord == 0] = 1
+
+        # Assure there are no outrange values
+        iXcoord[iXcoord == row] = row-2
+        iYcoord[iYcoord == row] = row-2
+        iXcoord[iXcoord == row-1] = row-2
+        iYcoord[iYcoord == row-1] = row-2
+
         # Calculate the fractionating for interpolation
         x1frac = (iXcoord + 1.0) - Xcoord  # Upper value to integer
         x2frac = 1.0 - x1frac

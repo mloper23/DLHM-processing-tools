@@ -25,27 +25,27 @@ def find_in(input_string, template):
 
 # Simulation parameters
 
-df = pd.read_excel(r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\focus_dist.xlsx")
+df = pd.read_excel(r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\focus_dist.xlsx")
 df.describe()
 
 df_keys = ['AS z \nfocus [mm]', 'kreuzer z\nfocus [mm]','Rayleigh z focus [mm]']
 
 reconstruct = LHM.reconstruct()
 
-gen_inp_path = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos"
+gen_inp_path = r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos"
 
-gen_out_path = r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Recs"
+gen_out_path = r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Recs"
 
 propagators = ['angularSpectrum','kreuzer_reconstruct','rayleigh_convolutional']
 props_names = [r'AS',r'kreuzer',r'RS1']
 
-file_paths = [r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\USAF-sampled.png",
-              r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\Grid_show.png",
-              r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\Fringes.png"]
+file_paths = [r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\USAF-sampled.png",
+              r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\Grid_show.png",
+              r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\Fringes.png"]
 
-output_paths = [r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos\USAF",
-                r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos\Grid",
-                r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos\Fringes"]
+output_paths = [r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos\USAF",
+                r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos\Grid",
+                r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Holos\Fringes"]
 
 samples = [r'\Usaf',r'\Grid',r'\Fringes']
 NAS = np.linspace(0.1,0.8,8)
@@ -82,8 +82,8 @@ for sample in range(3):
             out_height = in_height/Magn        # Height of the output plane [m]
             output_pitch = out_width/N
             focus_params =[[z_micro, holo, wvl, input_pitch, So_sc],
-               [z_micro, holo, wvl, So_sc, in_width,np.zeros_like(holo)],
-               [z_micro, holo, wvl, So_sc, in_width]]
+                           [z_micro, holo, wvl, So_sc, in_width,np.zeros_like(holo)],
+                           [z_micro, holo, wvl, So_sc, in_width]]
 
             start_rec = time.time()
             reconstruction = reconstruct.autocall(prop,focus_params[idx])
@@ -98,9 +98,13 @@ for sample in range(3):
             if sample == 2:
                 # image = reconstruct.norm_bits(np.angle(reconstruction),256)
                 # point_src = np.exp(-i * k_wvl)
-                image = -np.angle(reconstruction)
-                
-
+                tramitance = np.ones_like(holo)
+                ref_params =[[z_micro, tramitance, wvl, input_pitch, So_sc],
+                             [z_micro, tramitance, wvl, So_sc, in_width,np.zeros_like(tramitance)],
+                             [z_micro, tramitance, wvl, So_sc, in_width]]
+                reference = reconstruct.autocall(prop,ref_params[idx])
+                desenv = reconstruction * np.conjugate(reference)
+                image = np.angle(desenv)
             else:
                 # image = reconstruct.norm_bits(np.abs(reconstruction)**2,256)
                 image = np.abs(reconstruction) ** 2
@@ -108,6 +112,7 @@ for sample in range(3):
             if  prop == 'kreuzer_reconstruct' or prop == 'rayleigh_convolutional':
                 image = cv2.resize(image, (1024,1024), interpolation=cv2.INTER_AREA)
             LHM.save_image(image,path_fin)
+    print(sample+1)
 
 
 

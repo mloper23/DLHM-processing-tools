@@ -185,7 +185,7 @@ for i in range(len(kr_arr)):
     fig.update_xaxes(linecolor='black',gridcolor='lightgrey', mirror=True,row=row,col=col)
     fig.update_yaxes(linecolor='black',gridcolor='lightgrey', mirror=True,row=row,col=col)
 
-fig.show
+# fig.show
 fig.update_xaxes(title_text= 'Radius [mm]',row=3,col=1)
 fig.update_xaxes(title_text= 'Radius [mm]',row=3,col=2)
 fig.update_xaxes(title_text= 'Radius [mm]',row=2,col=3)

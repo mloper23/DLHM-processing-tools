@@ -12,6 +12,8 @@ import pandas as pd
 from scipy.interpolate import interp1d
 from PIL import Image
 from plotly.subplots import make_subplots
+import math as mt
+
 
 def get_files_in_folder(folder_path):
     files = []
@@ -41,11 +43,17 @@ cord_file = r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\USAF_co
 sheets = ['01','02','03','04','05','06','07','08']
 NA_arr = np.linspace(0.1,0.8,8)
 kr_arr = [True,True,True,True,True,False,False,False]
-showlegend = True
-fig = make_subplots(rows=1,cols=3)
+showlegend = False
+names = ['Angular Spectrum','Kreuzer','Convolutional Rayleigh']
+fig = make_subplots(rows=3, cols=3)
+color_palette =['#CEE719',
+                '#4D94AD',
+                '#E69FFF']
 
-for index in range(len(NA_arr)):
-    NA_num = NA_arr[index]
+for index in range(len(kr_arr)):
+    row = mt.floor(index/3)+1
+    col = index%3 + 1
+    NA_num = round(NA_arr[index],1)
     kreuzer_in = kr_arr[index]
     group_cords = pd.read_excel(cord_file,sheets[index])
     group_cords.describe()
@@ -58,7 +66,7 @@ for index in range(len(NA_arr)):
     files = get_files_in_folder(folder)
 
     props_names = [r'AS',r'kreuzer',r'RS1']
-    names = ['Angular Spectrum','Kreuzer','Rayleigh']
+    
     AS = [(group_cords['AS0'][i],group_cords['AS1'][i]) for i in range(6)]
     KR = [(group_cords['KR0'][i],group_cords['KR1'][i]) for i in range(6)]
     RS = [(group_cords['RS0'][i],group_cords['RS1'][i]) for i in range(6)]
@@ -80,6 +88,9 @@ for index in range(len(NA_arr)):
     max_px = 0
     for file in files:
         idx = files.index(file)
+        if kreuzer_in == False and 'kreuzer' in file:
+            mtfs[idx] == np.NaN
+            continue
         I = LHM.open_image(file)
         mtfs[idx],stdv[:,idx],profile_lists[idx] = metrics.measure_resolution(I,profiles,groups[idx])
         if len(profile_lists[idx])>max_px:
@@ -88,11 +99,15 @@ for index in range(len(NA_arr)):
     x_supreme = [i for i in range(max_px)]
 
     ind = 0
-    for profile in profile_lists:
-        x = np.linspace(0,max_px,len(profile))
-        inter = interp1d(x, profile, kind='linear')
-        profile_lists[ind] = inter(x_supreme)
-        ind = ind+1
+    # for profile in profile_lists:
+    #     idx = profile.index(profile_lists)
+    #     if kreuzer_in == False and 'kreuzer' in file:
+    #         continue
+        
+    #     x = np.linspace(0,max_px,len(profile))
+    #     inter = interp1d(x, profile, kind='linear')
+    #     profile_lists[ind] = inter(x_supreme)
+    #     ind = ind+1
 
 
 
@@ -106,7 +121,7 @@ for index in range(len(NA_arr)):
         'RS1':mtfs[2],
     })
 
-    fig = go.Figure()
+    
 
     color_palette =['#CEE719',
                     '#4D94AD',
@@ -114,61 +129,71 @@ for index in range(len(NA_arr)):
 
     rgba = ['rgba'+str(hex_rgba(c, transparency=0.3)) for c in color_palette]
 
-    for i, col in enumerate(df):
-        if col=='x':
+    for i, column in enumerate(df):
+        if column=='x':
             continue
-        if kreuzer_in==False and col=='kreuzer':
+        if kreuzer_in==False and column=='kreuzer':
             continue
         x = list(df['x'])
-        y1 = df[col]
+        y1 = df[column]
         y1_upper = list(y1+stdv[:,i-1])
         y1_lower = list(y1-stdv[:,i-1])
         y1_lower = y1_lower[::-1]
-        fig.add_traces(go.Scatter(x=x,
+        fig.add_trace(go.Scatter(x=x,
                                 y=y1,
                                 line=dict(color=color_palette[i-1], width=2.5),
                                 mode='lines',
-                                name=names[i-1])
-                                    )
+                                name=names[i-1]),
+                                row=row,col=col)
         
-        fig.add_traces(go.Scatter(x=x+x[::-1],
+        fig.add_trace(go.Scatter(x=x+x[::-1],
                                     y=y1_upper+y1_lower,
                                     fill='tozerox',
                                     fillcolor=rgba[i-1],
                                     line=dict(color=color_palette[i-1],width=0),
                                     marker=dict(opacity=0),
                                     showlegend=True,
-                                    name=names[i-1]+' std'))
+                                    name=names[i-1]+' std'),
+                                    row=row,col=col)
+        fig.update_xaxes(linecolor='black',gridcolor='lightgrey', range=[x[0],x[5]], mirror=True,row=row,col=col)
+        fig.update_yaxes(linecolor='black',gridcolor='lightgrey',range=[-0.01,1.01], mirror=True,row=row,col=col)
+        # fig.update_layout(title=dict(text=NAS),title_x=0.5,row=row,col=col)
         
+fig.update_xaxes(title_text= 'Spatial Frequency [1/\u03bcm]',row=3,col=1)
+fig.update_xaxes(title_text= 'Spatial Frequency [1/\u03bcm]',row=3,col=2)
+fig.update_xaxes(title_text= 'Spatial Frequency [1/\u03bcm]',row=2,col=3)
+fig.update_yaxes(title_text='Contrast',row=1,col=1)
+fig.update_yaxes(title_text='Contrast',row=2,col=1)
+fig.update_yaxes(title_text='Contrast',row=3,col=1)
         
-        
-    fig.update_xaxes(title_text= 'Spatial Frequency [1/\u03bcm]',range=[x[0],x[5]],linecolor='black',gridcolor='lightgrey',mirror=True)
-    fig.update_yaxes(title_text='Contrast',range=[-0.01,1.01],linecolor='black',gridcolor='lightgrey', mirror=True)
-    fig.update_layout(legend=dict(title='Reconstruction\nmethod'), showlegend=showlegend,plot_bgcolor='white',title_x=0.5)
-    fig.update_layout(
-                    title=dict(text='Frequency responses at NA '+NAS, font=dict(size=40), yref='paper'),
-                    font_family='Arial',
-                    font_color="black",
-                    title_font_family="Arial",
-                    title_font_color="black",
-                    )                                 
-    fig.update_layout(
-    font=dict(
-        family="Arial",
-        size=30,  # Set the font size here
-        color="black"))
+
+fig.update_layout(legend=dict(title='Reconstruction\nmethod'), showlegend=showlegend,plot_bgcolor='white',title_x=0.5)
+fig.update_layout(
+                title=dict(text='Frequency responses at different NA', font=dict(size=40), yref='paper'),
+                font_family='Arial',
+                font_color="black",
+                title_font_family="Arial",
+                title_font_color="black",
+                )                                 
+fig.update_layout(
+font=dict(
+    family="Arial",
+    size=30,  # Set the font size here
+    color="black"))
 
 
 config = {
   'toImageButtonOptions': {
     'format': 'svg', # one of png, svg, jpeg, webp
-    'filename': 'custom_image',
-    'height': 500,
-    'width': 700,
-    'scale': 1 # Multiply title/legend/axis/canvas sizes by this factor
+    'filename': 'MTFS_graph',
+    'height': 1400,
+    'width': 2048,
+    'scale':50 # Multiply title/legend/axis/canvas sizes by this factor
   }
 }
-folder_name = r'C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\MTF'+NA+'profile.html'
+
+fig.show(config=config)
+# folder_name = r'C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\MTF'+NA+'profile.html'
 # fig.write_html(folder_name)
 
 

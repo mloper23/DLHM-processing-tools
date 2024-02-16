@@ -33,18 +33,8 @@ def write_excel(mat,cols,file_path,sheetname):
     final_df = pd.DataFrame(mat,columns=cols)
     with pd.ExcelWriter(file_path,mode='a') as writer:
         final_df.to_excel(writer,sheet_name=sheetname,index=False,header=False)
-    
-
-
 
 metrics = LHM.metrics()
-
-
-
-sheets = ['01','02','03','04','05','06','07','08']
-NA_arr = np.linspace(0.1,0.8,8)
-kr_arr = [True,True,True,True,True,False,False,False]
-
 
 sample_selector = 1
 samples_names = ['USAF',

@@ -910,16 +910,8 @@ class metrics:
         ### Input:
         * I: Grayscale image as a numpy array 
         '''
-        region = I[rangex[0],rangex[1],rangey[0],rangey[1]]
-        H, W = I.shape
-        
-
-        M = [[1, -2, 1],
-            [-2, 4, -2],
-            [1, -2, 1]]
-
-        sigma = np.sum(np.sum(np.absolute(convolve2d(region, M))))
-        sigma = sigma * np.sqrt(0.5 * np.pi) / (6 * (W - 2) * (H - 2))
+        region = I[rangex[0]:rangex[1],rangey[0]:rangey[1]]
+        sigma = np.std(region)
         return sigma
     
     def find_peaks(self, signal, threshold):

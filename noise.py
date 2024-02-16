@@ -29,172 +29,124 @@ def hex_rgba(hex, transparency):
     areacol = tuple(col_rgb)
     return areacol
 
+def write_excel(mat,cols,file_path,sheetname):
+    final_df = pd.DataFrame(mat,columns=cols)
+    with pd.ExcelWriter(file_path,mode='a') as writer:
+        final_df.to_excel(writer,sheet_name=sheetname,index=False,header=False)
+    
 
 
 
 metrics = LHM.metrics()
-sample_path = r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Samples\USAF-sampled.png"
-sample = LHM.open_image(sample_path)
-profile_sample = sample[393:561,494]
-x = [i for i in range(len(profile_sample))]
 
-profiles = 492
-cord_file = r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\USAF_cords.xlsx"
+
+
 sheets = ['01','02','03','04','05','06','07','08']
 NA_arr = np.linspace(0.1,0.8,8)
 kr_arr = [True,True,True,True,True,False,False,False]
-showlegend = False
+
+
+sample_selector = 1
+samples_names = ['USAF',
+                 'x pattern']
+samples = ['USAF',
+           'Grid']
+ranges_usaf = [[540,623],[500,600]]
+ranges_grid = [[404,632],[245,475]]
+ranges = [ranges_usaf,ranges_grid]
+ranges = ranges[sample_selector]
+
 names = ['Angular Spectrum','Kreuzer','Convolutional Rayleigh']
-fig = make_subplots(rows=3, cols=3)
-color_palette =['#CEE719',
-                '#4D94AD',
-                '#E69FFF']
-
-for index in range(len(kr_arr)):
-    row = mt.floor(index/3)+1
-    col = index%3 + 1
-    NA_num = round(NA_arr[index],1)
-    kreuzer_in = kr_arr[index]
-    group_cords = pd.read_excel(cord_file,sheets[index])
-    group_cords.describe()
 
 
-    NAS = str(NA_num)
-    NA = r'\ '+NAS.replace('.','')
-    NA = NA.replace(' ','')
-    folder = r'C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Recs\USAF'+ NA
-    files = get_files_in_folder(folder)
+noises = [[],[],[]]
 
-    props_names = [r'AS',r'kreuzer',r'RS1']
-    
-    AS = [(group_cords['AS0'][i],group_cords['AS1'][i]) for i in range(6)]
-    KR = [(group_cords['KR0'][i],group_cords['KR1'][i]) for i in range(6)]
-    RS = [(group_cords['RS0'][i],group_cords['RS1'][i]) for i in range(6)]
-    groups=[AS,
-            KR,
-            RS]
+folder = r'C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Recs'
+files = get_files_in_folder(folder)
 
-
-
-
-
-
-    mtfs = [0,0,0]
-    stdv = np.zeros((6,3))
-    profile_lists = [0,0,0,profile_sample]
-
-
-
-    max_px = 0
-    for file in files:
-        idx = files.index(file)
-        if kreuzer_in == False and 'kreuzer' in file:
-            mtfs[idx] == np.NaN
-            continue
+for file in files:
+    if 'Fringes' in file:
+        continue
+    if samples[sample_selector] in file:
         I = LHM.open_image(file)
-        mtfs[idx],stdv[:,idx],profile_lists[idx] = metrics.measure_resolution(I,profiles,groups[idx])
-        if len(profile_lists[idx])>max_px:
-            max_px = len(profile_lists[idx])
+        local_noise = metrics.measure_noise(I,ranges[0],ranges[1])
+        if 'AS' in file:
+            noises[0].append(local_noise)
+        elif 'kreuzer' in file:
+            if '06' in file or '07' in file or '08' in file:
+                local_noise = np.NaN
+            noises[1].append(local_noise)
+        elif 'RS1' in file:
+            noises[2].append(local_noise)
 
-    x_supreme = [i for i in range(max_px)]
-
-    ind = 0
-    # for profile in profile_lists:
-    #     idx = profile.index(profile_lists)
-    #     if kreuzer_in == False and 'kreuzer' in file:
-    #         continue
-        
-    #     x = np.linspace(0,max_px,len(profile))
-    #     inter = interp1d(x, profile, kind='linear')
-    #     profile_lists[ind] = inter(x_supreme)
-    #     ind = ind+1
-
+df = pd.DataFrame({
+    'AS': noises[0],
+    'kreuzer': noises[1],
+    'RS1':noises[2]
+})
 
 
+#----------------------------  Plot -------------------------------------
+colors = ['#CEE719',
+          '#4D94AD',
+          '#E69FFF']
 
-    x = [1/12, 1/10, 1/8, 1/6, 1/4, 1/2]
-    x = [i/(7.32e-7 * 10**6) for i in x]
-    df = pd.DataFrame({
-        'x':x,
-        'AS':mtfs[0],
-        'kreuzer': mtfs[1],
-        'RS1':mtfs[2],
-    })
+rgba = ['rgba'+str(hex_rgba(c, transparency=0.2)) for c in colors]
+width = 1
 
-    
-
-    color_palette =['#CEE719',
-                    '#4D94AD',
-                    '#E69FFF']
-
-    rgba = ['rgba'+str(hex_rgba(c, transparency=0.3)) for c in color_palette]
-
-    for i, column in enumerate(df):
-        if column=='x':
-            continue
-        if kreuzer_in==False and column=='kreuzer':
-            continue
-        x = list(df['x'])
-        y1 = df[column]
-        y1_upper = list(y1+stdv[:,i-1])
-        y1_lower = list(y1-stdv[:,i-1])
-        y1_lower = y1_lower[::-1]
-        fig.add_trace(go.Scatter(x=x,
-                                y=y1,
-                                line=dict(color=color_palette[i-1], width=2.5),
-                                mode='lines',
-                                name=names[i-1]),
-                                row=row,col=col)
-        
-        fig.add_trace(go.Scatter(x=x+x[::-1],
-                                    y=y1_upper+y1_lower,
-                                    fill='tozerox',
-                                    fillcolor=rgba[i-1],
-                                    line=dict(color=color_palette[i-1],width=0),
-                                    marker=dict(opacity=0),
-                                    showlegend=True,
-                                    name=names[i-1]+' std'),
-                                    row=row,col=col)
-        fig.update_xaxes(linecolor='black',gridcolor='lightgrey', range=[x[0],x[5]], mirror=True,row=row,col=col)
-        fig.update_yaxes(linecolor='black',gridcolor='lightgrey',range=[-0.01,1.01], mirror=True,row=row,col=col)
-        # fig.update_layout(title=dict(text=NAS),title_x=0.5,row=row,col=col)
-        
-fig.update_xaxes(title_text= 'Spatial Frequency [1/\u03bcm]',row=3,col=1)
-fig.update_xaxes(title_text= 'Spatial Frequency [1/\u03bcm]',row=3,col=2)
-fig.update_xaxes(title_text= 'Spatial Frequency [1/\u03bcm]',row=2,col=3)
-fig.update_yaxes(title_text='Contrast',row=1,col=1)
-fig.update_yaxes(title_text='Contrast',row=2,col=1)
-fig.update_yaxes(title_text='Contrast',row=3,col=1)
-        
-
-fig.update_layout(legend=dict(title='Reconstruction\nmethod'), showlegend=showlegend,plot_bgcolor='white',title_x=0.5)
+fig = make_subplots(rows=1,cols=3)
+fig.add_trace(go.Box(y=df['AS'],
+                     name='Angular Spectrum',
+                     line=dict(color=colors[0], width=width),
+                     boxpoints='all',
+                     boxmean='sd'),
+                     row=1,col=1)
+fig.add_trace(go.Box(y=df['kreuzer'],
+                     name='Kreuzer',
+                     line=dict(color=colors[1], width=width),
+                     boxpoints='all',
+                     boxmean='sd'),
+                     row=1,col=2)
+fig.add_trace(go.Box(y=df['RS1'],
+                     name='Convolutional Rayleigh',
+                     line=dict(color=colors[2], width=width),
+                     boxpoints='all',
+                     boxmean='sd'),
+                     row=1,col=3)
+fig.update_yaxes(title_text='Reconstruction time [s]',row=1, col=1)
+fig.update_layout(legend=dict(title='Reconstruction\nmethod'),
+                  showlegend=False,
+                  title=dict(text='Noise in ' + samples_names[sample_selector] +' sample', font=dict(size=30), yref='paper'),
+                  font_family='Arial',
+                  font_color="black",
+                  title_font_family="Arial",
+                  title_font_color="black",
+                  title_x=0.5
+                  )                                 
 fig.update_layout(
-                title=dict(text='Frequency responses at different NA', font=dict(size=40), yref='paper'),
-                font_family='Arial',
-                font_color="black",
-                title_font_family="Arial",
-                title_font_color="black",
-                )                                 
-fig.update_layout(
-font=dict(
-    family="Arial",
-    size=30,  # Set the font size here
-    color="black"))
-
-
+    font=dict(
+        family="Arial",
+        size=20,  # Set the font size here
+        color="black"
+    )
+)
+# fig.write_html(file_path)
 config = {
   'toImageButtonOptions': {
     'format': 'svg', # one of png, svg, jpeg, webp
-    'filename': 'MTFS_graph',
-    'height': 1400,
-    'width': 2048,
-    'scale':50 # Multiply title/legend/axis/canvas sizes by this factor
+    'filename': 'rec_times',
+    'height': 700,
+    'width': 1024,
+    'scale':100 # Multiply title/legend/axis/canvas sizes by this factor
   }
 }
 
+
 fig.show(config=config)
-# folder_name = r'C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\Graphs\Resolution\MTF'+NA+'profile.html'
-# fig.write_html(folder_name)
+
+
+    
+    
 
 
 

@@ -921,84 +921,62 @@ class metrics:
                 peaks.append(i)
         return peaks
 
-    def measure_resolution(self,I,profile_idx_0,groups_arr):
+    def measure_contrast(self,profile,min_coords,max_coords):
+        # Input are: the profiel to evaluate the intensity, min coords and max coords
+        # are tuples with the range to evaluate the intensity 
+        min_value = np.mean(profile[min_coords[0]:min_coords[1]])
+        max_value = np.mean(profile[max_coords[0]:max_coords[1]])
+        return (max_value - min_value)/(max_value + min_value)
+
+
+    def measure_resolution(self,I,profile_idx_0,min_coords,max_coords,kreuzer_in):
+
+        measurements = 5
         I_array = np.copy(I)
         I = np.uint8(I*255)
         M,N = np.shape(I)
-        temp = np.uint8(open_image(r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\template.png")*255)
-        M_temp,N_temp = np.shape(temp)
-        grayImage = cv2.cvtColor(I, cv2.COLOR_GRAY2BGR)
-        template = cv2.cvtColor(temp, cv2.COLOR_GRAY2BGR)
-        image_copy = grayImage.copy()
-        result = cv2.matchTemplate(grayImage, template, cv2.TM_CCOEFF_NORMED)
-
-        # Define a threshold to filter out weak matches
-        threshold = 0.8
-        loc = np.where(result >= threshold)
-        init = 0
-        for pt in zip(*loc[::-1]):
-            if init == 0:
-                init = 1
-                pt_0 = pt
-            cv2.rectangle(image_copy, pt, (pt[0] + template.shape[1], pt[1] + template.shape[0]), (0, 255, 0), 2)
-        measurements = 5
-        pt_0 = (459,391)
         contrast_mat = np.zeros((measurements,6))
-        # profile_idx_0 = pt_0[0]+34
-        # print(pt_0)
-        mean_prof = 0
+
         for i in range(measurements):
             
             profile_idx = profile_idx_0+i
-            # profile = (I_array[pt_0[1]:pt_0[1]+M_temp,profile_idx])
             profile = I_array[:,profile_idx]
-            mean_prof = mean_prof + profile
-            G1,G2,G3,G4,G5,G6 = groups_arr
+            
 
-            G1 = profile[G1[0]:G1[1]]
-            G2 = profile[G2[0]:G2[1]]
-            G3 = profile[G3[0]:G3[1]]
-            G4 = profile[G4[0]:G4[1]]
-            G5 = profile[G5[0]:G5[1]]
-            G6 = profile[G6[0]:G6[1]]
-            groups = [G1,G2,G3,G4,G5,G6]
-            j = 0
-            for group in groups:
-                contrast = (np.amax(group) - np.amin(group))/(np.amin(group) + np.amax(group))
+            for j in range(6):
+                local_min = min_coords[j]
+                local_max = max_coords[j]
+
+
+                contrast = self.measure_contrast(profile,local_min,local_max)
                 contrast_mat[i,j] = contrast
-                j = j + 1
+
         
         # freqpx = [1/2, 1/4, 1/6, 1/8, 1/10, 1/12]
         freqpx = [1/12, 1/10, 1/8, 1/6, 1/4, 1/2]
         contrast = np.mean(contrast_mat,axis=0)
         std = np.std(contrast_mat,axis=0)
 
-        # fig = px.line(x=freqpx,y=contrast)
-        # fig.show(0)
-        resized_image = cv2.resize(image_copy, (512,512), interpolation=cv2.INTER_AREA)
-        
-        mean_prof = mean_prof/measurements
-        # cv2.imwrite(r"F:\OneDrive - Universidad EAFIT\Semestre X\TDG\Images\resol_template.jpg",image_copy)
-        
-        # contrast_mat es, en filas instancias, columnas, grupos de los USAF 
-        return contrast, std, mean_prof[groups_arr[0][0]:groups_arr[5][1]]
+        return contrast, std
     
-    def measure_distortion_improved(self,I):
-        M,N = np.shape(I)
+    def measure_distortion_improved(self,I,L):
+        pixel_pitch = 2.93e-6 #Camera sampling
+        z = L/4
+        I = I[300:724,300:724]
+        I = (I * 255).astype(np.uint8)
+        comp = cv2.adaptiveThreshold(I, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 20)
+        M,N = np.shape(comp)
         mid = np.sqrt(2 * int(N/2)**2)
-        diagonal = np.diag(I)
-        minima = find_local_minima(diagonal,8,255,30)
+        diagonal = np.diag(comp)
+        first_cero = np.where(diagonal == 0)[0][0]
 
-        c1 = (minima[0],minima[0])
-        c_id = (135,135)
-        r1 = np.sqrt(c1[0]**2 + c1[1]**2)
-        rid = np.sqrt(c_id[0]**2 + c_id[1]**2)
-        # c2 = (minima[1],minima[1])
-        # r2 = np.sqrt(c2[0]**2 + c2[1]**2)
-        distortion = np.abs((r1-rid))
+        
+        x = y = pixel_pitch * (212-first_cero)
+        delta_L = np.abs(np.sqrt(x**2 + y**2 +L**2)-L)
+        k1 = delta_L/z
 
         # distortion_percent = distortion*100
-        return distortion
+        return k1,(212-first_cero)
 
     def measure_distortion(self,I):
         kernel = np.array([[0.88,0.26,0.04,0.26,0.88],

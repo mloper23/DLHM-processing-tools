@@ -66,6 +66,17 @@ for index in range(len(kr_arr)):
     files = get_files_in_folder(folder)
 
     props_names = [r'AS',r'kreuzer',r'RS1']
+    '''This lines allow to select specifically the columns in the dataframes
+    that will be evaluated to pass to the function
+    '''
+    # keys = [key for key in min_coords.keys()]
+
+    # if kreuzer_in == False:
+    #     keys.remove('KR0')
+    #     keys.remove('KR1')
+
+    # min_coords_arr = min_coords[keys].to_numpy()
+    # max_coords_arr = max_coords[keys].to_numpy()
     
     AS = [(group_cords['AS0'][i],group_cords['AS1'][i]) for i in range(6)]
     KR = [(group_cords['KR0'][i],group_cords['KR1'][i]) for i in range(6)]

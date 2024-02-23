@@ -929,7 +929,7 @@ class metrics:
         return (max_value - min_value)/(max_value + min_value)
 
 
-    def measure_resolution(self,I,profile_idx_0,min_coords,max_coords,kreuzer_in):
+    def measure_resolution(self,I,profile_idx_0,min_coords,max_coords):
 
         measurements = 5
         I_array = np.copy(I)
@@ -952,15 +952,13 @@ class metrics:
                 contrast_mat[i,j] = contrast
 
         
-        # freqpx = [1/2, 1/4, 1/6, 1/8, 1/10, 1/12]
-        freqpx = [1/12, 1/10, 1/8, 1/6, 1/4, 1/2]
         contrast = np.mean(contrast_mat,axis=0)
         std = np.std(contrast_mat,axis=0)
 
         return contrast, std
     
     def measure_distortion_improved(self,I,L):
-        pixel_pitch = 2.93e-6 #Camera sampling
+        pixel_pitch = 2.93e-6 #Camera sampling [m]
         z = L/4
         I = I[300:724,300:724]
         I = (I * 255).astype(np.uint8)

@@ -64,6 +64,8 @@ k_wvl = 2*np.pi/wvl
 reconstruction_times = [[],[],[],[]]
 
 for sample in range(3):
+    if sample !=2: # ERRASE THIS LINE IF YOU WANT TO RECONSTRUCT ALL THE HOLOGRAMS AGAIN
+        continue
     folder = gen_inp_path + samples[sample]
     files = get_files_in_folder(folder)
     files = [i for i in files if 'ref' not in i]
@@ -103,7 +105,10 @@ for sample in range(3):
                              [z_micro, tramitance, wvl, So_sc, in_width,np.zeros_like(tramitance)],
                              [z_micro, tramitance, wvl, So_sc, in_width]]
                 reference = reconstruct.autocall(prop,ref_params[idx])
-                desenv = reconstruction * np.conjugate(reference)
+                if prop == 'rayleigh_convolutional':
+                    desenv = reconstruction * np.conjugate(reference)
+                else:
+                    desenv = np.conjugate(reconstruction) * (reference)
                 image = np.angle(desenv)
             else:
                 # image = reconstruct.norm_bits(np.abs(reconstruction)**2,256)
@@ -112,6 +117,7 @@ for sample in range(3):
             if  prop == 'kreuzer_reconstruct' or prop == 'rayleigh_convolutional':
                 image = cv2.resize(image, (1024,1024), interpolation=cv2.INTER_AREA)
             LHM.save_image(image,path_fin)
+        # break # ERRASE THIS LINE TOO---------------------------------------------------------------
     print(sample+1)
 
 

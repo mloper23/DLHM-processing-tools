@@ -39,7 +39,9 @@ profile_sample = sample[393:561,494]
 x = [i for i in range(len(profile_sample))]
 
 profiles = 492
-cord_file = r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\USAF_cords.xlsx"
+min_cord_file = r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\USAF_min_cords.xlsx"
+max_cord_file = r"C:\Users\tom_p\OneDrive - Universidad EAFIT\Semestre X\TDG\USAF_max_cords.xlsx"
+
 sheets = ['01','02','03','04','05','06','07','08']
 NA_arr = np.linspace(0.1,0.8,8)
 kr_arr = [True,True,True,True,True,False,False,False]
@@ -55,8 +57,8 @@ for index in range(len(kr_arr)):
     col = index%3 + 1
     NA_num = round(NA_arr[index],1)
     kreuzer_in = kr_arr[index]
-    group_cords = pd.read_excel(cord_file,sheets[index])
-    group_cords.describe()
+    min_group_cords = pd.read_excel(min_cord_file,sheets[index])
+    max_group_cords = pd.read_excel(max_cord_file,sheets[index])
 
 
     NAS = str(NA_num)
@@ -69,23 +71,28 @@ for index in range(len(kr_arr)):
     '''This lines allow to select specifically the columns in the dataframes
     that will be evaluated to pass to the function
     '''
-    # keys = [key for key in min_coords.keys()]
+    keys = [key for key in min_group_cords.keys()]
 
     # if kreuzer_in == False:
     #     keys.remove('KR0')
     #     keys.remove('KR1')
 
-    # min_coords_arr = min_coords[keys].to_numpy()
-    # max_coords_arr = max_coords[keys].to_numpy()
+    min_coords_arr = min_group_cords[keys].to_numpy(dtype=np.integer) + 1
+    max_coords_arr = max_group_cords[keys].to_numpy(dtype=np.integer) + 1
     
-    AS = [(group_cords['AS0'][i],group_cords['AS1'][i]) for i in range(6)]
-    KR = [(group_cords['KR0'][i],group_cords['KR1'][i]) for i in range(6)]
-    RS = [(group_cords['RS0'][i],group_cords['RS1'][i]) for i in range(6)]
-    groups=[AS,
-            KR,
-            RS]
+    # AS = [(min_group_cords['AS0'][i],min_group_cords['AS1'][i]) for i in range(6)]
+    # KR = [(min_group_cords['KR0'][i],min_group_cords['KR1'][i]) for i in range(6)]
+    # RS = [(min_group_cords['RS0'][i],min_group_cords['RS1'][i]) for i in range(6)]
+    # min_groups=[AS,
+    #         KR,
+    #         RS]
 
-
+    # AS = [(max_group_cords['AS0'][i],max_group_cords['AS1'][i]) for i in range(6)]
+    # KR = [(max_group_cords['KR0'][i],max_group_cords['KR1'][i]) for i in range(6)]
+    # RS = [(max_group_cords['RS0'][i],max_group_cords['RS1'][i]) for i in range(6)]
+    # min_groups=[AS,
+    #         KR,
+    #         RS]
 
 
 
@@ -99,13 +106,14 @@ for index in range(len(kr_arr)):
     max_px = 0
     for file in files:
         idx = files.index(file)
+        min_coords = min_coords_arr[:,2*idx:2*idx+2]
+        max_coords = max_coords_arr[:,2*idx:2*idx+2]
         if kreuzer_in == False and 'kreuzer' in file:
             mtfs[idx] == np.NaN
             continue
         I = LHM.open_image(file)
-        mtfs[idx],stdv[:,idx],profile_lists[idx] = metrics.measure_resolution(I,profiles,groups[idx])
-        if len(profile_lists[idx])>max_px:
-            max_px = len(profile_lists[idx])
+        mtfs[idx],stdv[:,idx]= metrics.measure_resolution(I,profiles,min_coords,max_coords)
+
 
     x_supreme = [i for i in range(max_px)]
 
@@ -199,7 +207,7 @@ config = {
     'filename': 'MTFS_graph',
     'height': 1400,
     'width': 2048,
-    'scale':50 # Multiply title/legend/axis/canvas sizes by this factor
+    'scale':1 # Multiply title/legend/axis/canvas sizes by this factor
   }
 }
 

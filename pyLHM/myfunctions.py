@@ -921,12 +921,15 @@ class metrics:
                 peaks.append(i)
         return peaks
 
-    def measure_contrast(self,profile,min_coords,max_coords):
+    def measure_contrast(self,profile,min_coords,max_coords,last):
         # Input are: the profiel to evaluate the intensity, min coords and max coords
         # are tuples with the range to evaluate the intensity 
         min_value = np.mean(profile[min_coords[0]:min_coords[1]])
         max_value = np.mean(profile[max_coords[0]:max_coords[1]])
-        return (max_value - min_value)/(max_value + min_value)
+        if last:
+            min_value = profile[min_coords[0]]
+            max_value = profile[max_coords[0]]
+        return np.abs((max_value - min_value)/(max_value + min_value))
 
 
     def measure_resolution(self,I,profile_idx_0,min_coords,max_coords):
@@ -944,11 +947,12 @@ class metrics:
             
 
             for j in range(6):
-                local_min = min_coords[j]
-                local_max = max_coords[j]
+                last = j==5
+                local_min = min_coords[j,:]
+                local_max = max_coords[j,:]
 
 
-                contrast = self.measure_contrast(profile,local_min,local_max)
+                contrast = self.measure_contrast(profile,local_min,local_max,last)
                 contrast_mat[i,j] = contrast
 
         
@@ -1136,7 +1140,9 @@ def resize(I,sr):
 
     return norm(np.asarray(out)[:,:,0])
 
-
+def plot_ly(signal):
+    plt.figure()
+    plt.plot(signal)
 
 
 

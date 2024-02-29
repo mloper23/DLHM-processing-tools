@@ -44,7 +44,8 @@ profile_sample = 2 * np.pi * metrics.measure_phase_sensitivity(sample)
 x = [i for i in range(len(profile_sample))]
 profile_sample = profile_sample[129:675]
 
-showlegend = False
+showlegend = True
+smoothened = False
 
 Numerical_appertures = ['0.1','0.2','0.3','0.4','0.5','0.6','0.7','0.8']
 kr_arr = [True,True,True,True,False,False,False,False,]
@@ -217,7 +218,7 @@ config = {
     'filename': 'custom_image',
     'height': 1400,
     'width': 2048,
-    'scale':50 # Multiply title/legend/axis/canvas sizes by this factor
+    'scale':1 # Multiply title/legend/axis/canvas sizes by this factor
   }
 }
 

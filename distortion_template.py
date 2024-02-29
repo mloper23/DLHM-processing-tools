@@ -43,8 +43,9 @@ metrics = LHM.metrics()
 sheets = ['01','02','03','04','05','06','07','08']
 NA_arr = np.linspace(0.1,0.8,8)
 kr_arr = [True,True,True,True,True,False,False,False]
-showlegend = False
+showlegend = True
 dashing = ['longdash','solid','dash']
+markers = ['square','x','circle']
 names = ['Angular Spectrum','Kreuzer','Convolutional Rayleigh']
 fig = go.Figure()
 
@@ -138,21 +139,29 @@ for i, column in enumerate(df):
     fig.add_trace(go.Scatter(x=x,
                             y=y1,
                             line=dict(color=color_palette[i-1]),
+                            marker = dict(symbol=markers[i-1]),
                             mode='markers',
                             marker_line_width=1,
                             name=names[i-1]))
-
-for i, column in enumerate(dfit):
-    if column=='x':
-        continue
-    x = dfit['x']
-    y1 = dfit[column]
-
+    
     fig.add_trace(go.Scatter(x=x,
                             y=y1,
                             line=dict(color=color_palette[i-1], width=2.5,dash=dashing[i-1]),
                             mode='lines',
+                            marker_line_width=1,
                             name=names[i-1]))
+
+# for i, column in enumerate(dfit):
+#     if column=='x':
+#         continue
+#     x = dfit['x']
+#     y1 = dfit[column]
+
+#     fig.add_trace(go.Scatter(x=x,
+#                             y=y1,
+#                             line=dict(color=color_palette[i-1], width=2.5,dash=dashing[i-1]),
+#                             mode='lines',
+#                             name=names[i-1]))
 
 fig.update_xaxes(linecolor='black',gridcolor='lightgrey', range=[NA_arr[0]-0.05,NA_arr[7]+0.05], mirror=True)
 fig.update_yaxes(linecolor='black',gridcolor='lightgrey', mirror=True)
